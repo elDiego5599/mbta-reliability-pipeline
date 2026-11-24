@@ -64,9 +64,11 @@ def tu_row(trip, seq, header_ts, delay):
 
 
 def test_vehicle_report_repeated_across_snapshots_kept_once_with_earliest_header():
-    out = dedup_sort("VehiclePositions", vp_rows(header_ts=100) + vp_rows(header_ts=130))
-    assert len(out) == len(vp_rows(header_ts=100))
-    assert {r["header_ts"] for r in out} == {100}
+    rows = vp_rows(header_ts=100) + vp_rows(header_ts=130)
+    for ordered in (rows, rows[::-1]):
+        out = dedup_sort("VehiclePositions", ordered)
+        assert len(out) == len(vp_rows(header_ts=100))
+        assert {r["header_ts"] for r in out} == {100}
 
 
 def test_trip_updates_kept_per_snapshot():
@@ -81,8 +83,9 @@ def test_alerts_kept_per_snapshot():
 
 def test_null_keys_never_merged():
     a = deleted_vp_row(entity_id="e1", header_ts=100)
-    b = deleted_vp_row(entity_id="e2", header_ts=100)
+    b = deleted_vp_row(entity_id="e1", header_ts=130)
     assert len(dedup_sort("VehiclePositions", [a, b])) == 2
+    assert len(dedup_sort("VehiclePositions", [a, a])) == 2
 
 
 def test_conflicting_rows_both_kept():
@@ -94,3 +97,16 @@ def test_conflicting_rows_both_kept():
 def test_order_independent_of_input_order():
     rows = vp_rows(100) + vp_rows(130)
     assert dedup_sort("VehiclePositions", rows) == dedup_sort("VehiclePositions", rows[::-1])
+
+
+def test_null_key_sorts_before_non_null_keys():
+    live = vp_rows(100)[0]
+    deleted = deleted_vp_row(entity_id="zzz", header_ts=100)
+    out = dedup_sort("VehiclePositions", [live, deleted])
+    assert out[0]["vehicle__id"] is None
+    assert out[1]["vehicle__id"] == live["vehicle__id"]
+
+
+def test_output_ordered_by_key():
+    out = dedup_sort("VehiclePositions", vp_rows(100)[::-1])
+    assert [r["vehicle__id"] for r in out] == ["v1", "v2"]
