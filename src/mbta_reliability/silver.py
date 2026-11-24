@@ -1,5 +1,6 @@
 """Silver layer: Arrow schema and values derived from GTFS Realtime protobuf descriptors."""
 
+import json
 from typing import NamedTuple
 
 import pyarrow as pa
@@ -155,3 +156,43 @@ def snapshot_rows(feed: str, header_ts: int, payload: bytes) -> list[dict]:
         _, rows = _flatten(struct, value, spec.explode)
         out += [{**base, **row} for row in rows]
     return out
+
+
+def _canonical(row: dict) -> str:
+    """Row content without header_ts as stable JSON, for comparison and final ordering."""
+    content = {k: v for k, v in row.items() if k != "header_ts"}
+    return json.dumps(content, sort_keys=True, default=lambda b: bytes(b).hex())
+
+
+def _order(value) -> tuple:
+    """Total order over a column of one type, with None first."""
+    return (0, 0) if value is None else (1, value)
+
+
+def dedup_sort(feed: str, rows: list[dict]) -> list[dict]:
+    """Drop repeats of a report seen in later snapshots and order rows deterministically.
+
+    Rows are duplicates when their key is fully non-null and equal and every column except
+    header_ts matches; the one with the smallest header_ts is kept. The result is ordered by
+    key columns, entity_id and canonical content, None first, whatever the input order.
+    """
+    key = FEEDS[feed].key
+    seen: set[tuple] = set()
+    kept: list[tuple[dict, str]] = []
+    for row in sorted(rows, key=lambda r: r["header_ts"]):
+        canonical = _canonical(row)
+        values = tuple(row[col] for col in key)
+        if None not in values:
+            identity = (values, canonical)
+            if identity in seen:
+                continue
+            seen.add(identity)
+        kept.append((row, canonical))
+    kept.sort(
+        key=lambda item: (
+            *(_order(item[0][col]) for col in key),
+            _order(item[0]["entity_id"]),
+            item[1],
+        )
+    )
+    return [row for row, _ in kept]
