@@ -28,7 +28,7 @@ packages = ["src/mbta_reliability"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -x --ff"
 
 [tool.ruff]
 line-length = 100
