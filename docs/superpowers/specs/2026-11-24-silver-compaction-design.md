@@ -203,9 +203,9 @@ alone in that case.
 ### Interface
 
 ```python
-def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> Path | None:
-    """Compact one feed for one UTC hour. Return the silver path, or None if
-    the hour has no bronze snapshots."""
+def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> tuple[Path, int] | None:
+    """Compact one feed for one UTC hour. Return the silver path and the
+    number of bronze files read, or None if the hour has no bronze snapshots."""
 ```
 
 CLI entry point `mbta-compact`:
