@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Data and local state (never committed)
+data/
+*.duckdb
+*.duckdb.wal
+.dagster/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.json.key
+service-account*.json
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
