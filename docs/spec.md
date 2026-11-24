@@ -135,7 +135,11 @@ after a full week of real counts replaces them in this table.
 - **Row level.** Compaction keeps one row per (`vehicle_id`,
   `vehicle_timestamp`) for positions, one per (`trip_id`, `start_date`,
   `stop_sequence`, `header_ts`) for trip updates, and one per (`alert_id`,
-  `last_modified_timestamp`) for alerts.
+  `header_ts`) for alerts. The protobuf `Alert` has no
+  `last_modified_timestamp`, so silver keeps each alert once per snapshot and
+  `stg_alerts` collapses unchanged consecutive rows into alert versions. Full
+  rules, including null keys and conflicting rows, are in the
+  [compaction design](superpowers/specs/2026-11-24-silver-compaction-design.md).
 - **Hour level.** Compaction overwrites `hour=HH.parquet` whole. Running it twice
   for the same hour gives a byte-identical file.
 
