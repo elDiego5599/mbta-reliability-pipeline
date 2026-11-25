@@ -1,4 +1,4 @@
-"""Convert static GTFS zip members into all-string Arrow tables."""
+"""Static GTFS: zip members to all-string tables, stored once per version."""
 
 import csv
 import hashlib
@@ -208,12 +208,17 @@ def publish_version(data_dir: Path, zip_bytes: bytes, tables: dict[str, pa.Table
 
 
 def remove_temp_dirs(data_dir: Path) -> None:
+    """Remove `.tmp-*` directories and files left by an interrupted run."""
     static = static_dir(data_dir)
     if not static.is_dir():
         return
     for entry in static.iterdir():
-        if entry.name.startswith(".tmp-") and entry.is_dir():
+        if not entry.name.startswith(".tmp-"):
+            continue
+        if entry.is_dir():
             shutil.rmtree(entry)
+        else:
+            entry.unlink()
 
 
 def read_versions(data_dir: Path) -> list[dict]:

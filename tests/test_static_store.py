@@ -83,6 +83,7 @@ def test_remove_temp_dirs(tmp_path):
     static = tmp_path / "static"
     (static / ".tmp-abc").mkdir(parents=True)
     (static / ".tmp-abc" / "x").write_text("x")
+    (static / ".tmp-versions").write_text("partial")
     (static / "feed_version=1").mkdir()
 
     remove_temp_dirs(tmp_path)
