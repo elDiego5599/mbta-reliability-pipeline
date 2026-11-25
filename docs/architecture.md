@@ -120,3 +120,4 @@ in the code depends on macOS; launchd is replaced by a systemd unit.
 | [0006](adr/0006-evidence-dashboard.md) | Evidence static site on the DuckDB marts for the public dashboard; replaced Looker Studio on BigQuery on 2026-11-25. |
 | [0007](adr/0007-runtime-mac-then-vm.md) | Run on the Mac with launchd first, a small VM later. |
 | [0008](adr/0008-bronze-retention.md) | Delete bronze after 14 days only when silver lists every snapshot of the hour. |
+| [0009](adr/0009-vehicle-position-versions.md) | Stage vehicle positions as one row per report version, keyed by (`vehicle__id`, `timestamp`, `header_ts`). |

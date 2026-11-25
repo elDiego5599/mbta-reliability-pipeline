@@ -32,7 +32,9 @@ second run, every number downstream is wrong without any visible error.
 - Dedup across hour boundaries. A vehicle report seen in the last snapshot of
   hour H and the first snapshot of hour H+1 appears in both files; the dbt
   staging model removes it (spec 6.1 already puts a `unique` test on the grain
-  key there).
+  key there). The staging grain for vehicle positions is one version of a
+  report, (`vehicle__id`, `timestamp`, `header_ts`) (amended 2026-11-25, see
+  [ADR 0009](../../adr/0009-vehicle-position-versions.md)).
 - Time zone conversion, unit conversion or any derived column beyond the
   bookkeeping columns listed below. Those belong to dbt.
 
