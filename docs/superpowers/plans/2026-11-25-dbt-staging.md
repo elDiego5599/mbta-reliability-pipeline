@@ -353,3 +353,10 @@ there; status line unchanged).
   `/Users/diegoangarita/mbta-reliability-notes/MASTER_PLAN.md` (cross out
   the two phase 2 items with date and commit, add the phase 3 incremental
   switch item, move Current focus, add a log entry) and commit there.
+  Also add the item: return to `gtfs-realtime-bindings` 3.x when dbt-core
+  supports protobuf 7.
+- [ ] **Step 5:** Record in the final report, for after the merge (not
+  this branch's step): the main checkout needs `uv sync`, and the launchd
+  agents need a restart so the poller runs on protobuf 6:
+  `launchctl kill SIGTERM gui/$(id -u)/<label>`, which launchd restarts
+  (see `docs/operations.md`, Update the code).

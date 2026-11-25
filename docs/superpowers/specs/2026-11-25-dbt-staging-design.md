@@ -52,6 +52,12 @@ or a lost row here makes every metric wrong without a visible error.
   dbt from the same environment in phase 3. No dbt packages (`dbt deps`
   would need the network at build time); the one generic test needed is
   written in the project.
+- `gtfs-realtime-bindings` is pinned to `>=2,<3`, which brings protobuf
+  6.x. Bindings 3.0 needs protobuf 7, and no dbt-core release accepts
+  protobuf 7 yet (dbt-core requires protobuf < 7). The message descriptors
+  of bindings 2.2.0 and 3.0.0 are identical (same 305 fields and enum
+  values), so the poller, compaction and the silver schema do not change.
+  Return to bindings 3.x once dbt-core supports protobuf 7.
 - Inputs, read only:
   - `silver/<feed>/date=YYYY-MM-DD/hour=HH.parquet`. The date is a hive
     directory; the hour is in the file name only.

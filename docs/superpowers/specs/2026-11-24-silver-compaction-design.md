@@ -51,6 +51,7 @@ These would make it a failure even if it technically works:
 ## Constraints
 
 - Python 3.12, uv, `gtfs-realtime-bindings` (protobuf 7.x, upb backend).
+  (Amended 2026-11-25: pinned to `gtfs-realtime-bindings>=2,<3`, so protobuf 6.x, because dbt-core requires protobuf < 7. The 2.2 and 3.0 descriptors are identical, so the silver schema does not change. See the dbt staging design.)
   New dependency: `pyarrow`. Nothing else.
 - Bronze layout (existing): `data/bronze/<feed>/date=YYYY-MM-DD/hour=HH/<header_ts>.pb.zst`,
   where `<feed>` is `VehiclePositions`, `TripUpdates` or `Alerts`, and the
