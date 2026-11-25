@@ -35,6 +35,10 @@ uv run mbta-poller --data-dir data
 hour against the expected count, and disk use. To run everything unattended,
 see [Operations](docs/operations.md).
 
+`make dbt-build` builds and tests the dbt models in `dbt/` against `data/`
+into `data/warehouse.duckdb`. Set `MBTA_DATA_DIR` and `MBTA_WAREHOUSE` to
+read or write elsewhere.
+
 ## Stack
 
 Python poller, Parquet data lake, DuckDB, dbt, Dagster, and an Evidence
