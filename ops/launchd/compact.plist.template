@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- This is a launchd template rendered by install.sh and must not be edited once installed. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.eldiego5599.mbta.compact</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@REPO@/.venv/bin/mbta-compact</string>
+    <string>--data-dir</string>
+    <string>@REPO@/data</string>
+    <string>--pending</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@REPO@/data/logs/compact.log</string>
+  <key>StandardErrorPath</key>
+  <string>@REPO@/data/logs/compact.log</string>
+</dict>
+</plist>

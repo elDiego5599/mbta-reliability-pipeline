@@ -31,6 +31,7 @@ def main(
         )
 
     checked_at = now if now is not None else lambda: datetime.now(UTC)
+    print(f"run at {checked_at():%Y-%m-%dT%H:%M:%SZ}")
     try:
         result = sync_static(client, args.data_dir, now=checked_at)
     except StaticError as exc:

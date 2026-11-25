@@ -18,7 +18,7 @@ PARQUET_COMPRESSION = "zstd"
 PARQUET_COMPRESSION_LEVEL = 3
 ROW_GROUP_ROWS = 1_000_000
 
-_BRONZE_NAME = re.compile(r"^(\d+)\.pb\.zst$")
+BRONZE_NAME = re.compile(r"^(\d+)\.pb\.zst$")
 
 _SCALARS = {
     FieldDescriptor.CPPTYPE_INT32: pa.int32(),
@@ -233,7 +233,7 @@ def _bronze_files(hour_dir: Path) -> list[tuple[int, Path]]:
     for entry in hour_dir.iterdir():
         if entry.name.startswith(".tmp-"):
             continue
-        match = _BRONZE_NAME.match(entry.name)
+        match = BRONZE_NAME.match(entry.name)
         if match is None or not entry.is_file():
             raise CompactionError(f"unexpected entry in bronze hour directory: {entry.name}")
         files.append((int(match.group(1)), entry))

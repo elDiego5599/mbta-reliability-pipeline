@@ -71,8 +71,8 @@ flowchart LR
 | Component | What it does | Runs | Writes |
 |---|---|---|---|
 | `poller` | Fetches the three realtime feeds on their own cadence, retries with backoff, writes each snapshot atomically, logs every attempt. | Long-lived process kept alive by launchd. | `bronze/`, `fetch_log/` |
-| `compact` | Parses one hour of bronze snapshots into one Parquet file per feed, dropping exact duplicates. Overwrites that hour. | Dagster, hourly at :05 for the previous hour. | `silver/` |
-| `static` | Downloads `MBTA_GTFS.zip` when its ETag changes and stores each `feed_version` as Parquet. | Dagster, daily at 04:00 Boston time. | `static/` |
+| `compact` | Parses one hour of bronze snapshots into one Parquet file per feed, dropping exact duplicates. Overwrites that hour. | launchd agent hourly at :10 (`--pending`) until Dagster takes over at phase 3. | `silver/` |
+| `static` | Downloads `MBTA_GTFS.zip` when its ETag changes and stores each `feed_version` as Parquet. | launchd agent daily at 04:00 local time until Dagster takes over. | `static/` |
 | dbt project | Staging, intermediate and mart models in DuckDB, plus tests. | Dagster, after each daily partition closes. | `warehouse.duckdb` |
 | `export` | Loads the mart tables into BigQuery, replacing them. | Dagster, daily after dbt. | BigQuery dataset |
 | Dashboard | Looker Studio report on the BigQuery marts. | Google, free. | Nothing |
@@ -102,11 +102,13 @@ service day are derived later in dbt.
 ## Where it runs
 
 Phase 1 to 3 run on the owner's Mac. launchd starts the poller at login and
-restarts it if it exits. Sleep is the main risk: while the Mac sleeps nothing
-is fetched, and the gap shows up in `fetch_log` and in the data quality checks
-instead of being hidden. Once the pipeline is stable it moves to a small VM
-(see [ADR 0007](adr/0007-runtime-mac-then-vm.md)). Nothing in the code depends
-on macOS; launchd is replaced by a systemd unit.
+restarts it if it exits, with `caffeinate -i` preventing idle sleep while the
+poller runs. Sleep is the main risk: while the Mac sleeps nothing is fetched,
+and the gap shows up in `fetch_log` and in the data quality checks instead of
+being hidden. Installation, scheduling, checking and wake behaviour are in
+[the operations runbook](operations.md). Once the pipeline is stable it
+moves to a small VM (see [ADR 0007](adr/0007-runtime-mac-then-vm.md)). Nothing
+in the code depends on macOS; launchd is replaced by a systemd unit.
 
 ## Decisions
 

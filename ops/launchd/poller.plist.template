@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- This is a launchd template rendered by install.sh and must not be edited once installed. -->
+<!-- caffeinate -i prevents idle sleep while the poller is running. -->
+<!-- ThrottleInterval is 30 seconds to avoid rapid restarts after startup failure. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.eldiego5599.mbta.poller</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>@REPO@/.venv/bin/mbta-poller</string>
+    <string>--data-dir</string>
+    <string>@REPO@/data</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>@REPO@/data/logs/poller.log</string>
+  <key>StandardErrorPath</key>
+  <string>@REPO@/data/logs/poller.log</string>
+</dict>
+</plist>
