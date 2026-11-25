@@ -56,6 +56,15 @@ def test_last_modified_kept_with_etag(fake_sleep):
     assert result.last_modified == "Mon, 23 Nov 2026 21:51:03 GMT"
 
 
+def test_response_etag_has_no_fallback(fake_sleep):
+    client = client_for(httpx.Response(200, content=b"abc"))
+
+    result = run(client, fake_sleep, etag='"old"')
+
+    assert result.etag == '"old"'
+    assert result.response_etag is None
+
+
 def test_retries_server_error_then_succeeds(fake_sleep):
     client = client_for(httpx.Response(503), httpx.Response(200, content=b"ok"))
 

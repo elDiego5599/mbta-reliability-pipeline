@@ -46,6 +46,28 @@ def test_header_only_file_gives_zero_rows(gtfs_zip):
     assert table.column_names == ["a", "b"]
 
 
+def test_header_only_without_trailing_newline(gtfs_zip):
+    table = read_tables(gtfs_zip({"stops.txt": "stop_id,stop_name"}))["stops"]
+    assert table.num_rows == 0
+    assert table.column_names == ["stop_id", "stop_name"]
+    assert all(pa.types.is_string(field.type) for field in table.schema)
+
+
+def test_bom_removed(gtfs_zip):
+    body = b"\xef\xbb\xbfstop_id,stop_name\n1,Test\n"
+    table = read_tables(gtfs_zip({"stops.txt": body}))["stops"]
+    assert table.column_names == ["stop_id", "stop_name"]
+
+
+def test_quoted_newline_in_large_member(gtfs_zip):
+    body = "stop_id,stop_desc\n" + "".join(
+        f'{i},"line one\nline two {i}"\n' for i in range(400_000)
+    )
+    table = read_tables(gtfs_zip({"stops.txt": body}))["stops"]
+    assert table.num_rows == 400_000
+    assert table.column(1)[0].as_py() == "line one\nline two 0"
+
+
 @pytest.mark.parametrize("name", ["../evil.txt", "gtfs/stops.txt", "Stops.txt", "notes.md", "dir/"])
 def test_rejects_unexpected_member(gtfs_zip, name):
     with pytest.raises(StaticError, match=re.escape(name)):
@@ -53,16 +75,17 @@ def test_rejects_unexpected_member(gtfs_zip, name):
 
 
 @pytest.mark.parametrize(
-    ("body", "message"),
+    ("body", "reason"),
     [
-        ("a,a\n1,2\n", "x.txt"),
-        ("a,,b\n1,2,3\n", "x.txt"),
-        ("a,b\n1,2,3\n", "x.txt"),
+        ("a,a\n1,2\n", "duplicate column name"),
+        ("a,,b\n1,2,3\n", "empty column name"),
+        ("a,b\n1,2,3\n", "invalid CSV or ragged row"),
     ],
 )
-def test_rejects_bad_columns_or_rows(gtfs_zip, body, message):
-    with pytest.raises(StaticError, match=re.escape(message)):
+def test_rejects_bad_columns_or_rows(gtfs_zip, body, reason):
+    with pytest.raises(StaticError, match=re.escape("x.txt")) as error:
         read_tables(gtfs_zip({"x.txt": body}))
+    assert reason in str(error.value)
 
 
 def test_rejects_invalid_utf8(gtfs_zip):

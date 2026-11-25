@@ -138,6 +138,39 @@ def test_same_bytes_new_etag_updates_row_only(tmp_path, gtfs_zip, fake_sleep):
     assert third.seen[0].headers["If-None-Match"] == '"e2"'
 
 
+def test_new_bytes_without_etag_store_null_etag(tmp_path, gtfs_zip, fake_sleep):
+    body_a = gtfs_zip(feed_version="Test, version A")
+    body_b = gtfs_zip(feed_version="Test, version B")
+    times = iter(
+        [
+            datetime(2026, 11, 24, 1, 0, 0, tzinfo=UTC),
+            datetime(2026, 11, 24, 2, 0, 0, tzinfo=UTC),
+        ]
+    )
+    sync_static(
+        client_for(first_response(body_a, '"e1"')),
+        tmp_path,
+        now=lambda: next(times),
+        sleep=fake_sleep,
+    )
+
+    sync_static(
+        client_for(httpx.Response(200, content=body_b)),
+        tmp_path,
+        now=lambda: next(times),
+        sleep=fake_sleep,
+    )
+
+    rows = read_versions(tmp_path)
+    new_row = next(row for row in rows if row["feed_version"] == "Test, version B")
+    assert new_row["etag"] is None
+
+    third = client_for(httpx.Response(304))
+    third_time = datetime(2026, 11, 24, 3, 0, 0, tzinfo=UTC)
+    sync_static(third, tmp_path, now=lambda: third_time, sleep=fake_sleep)
+    assert "If-None-Match" not in third.seen[0].headers
+
+
 def test_new_bytes_add_second_version(tmp_path, gtfs_zip, fake_sleep):
     body_a = gtfs_zip(feed_version="Test, version A")
     body_b = gtfs_zip(feed_version="Test, version B")

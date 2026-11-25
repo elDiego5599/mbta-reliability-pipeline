@@ -113,12 +113,15 @@ def read_tables(zip_bytes: bytes) -> dict[str, pa.Table]:
                 raise StaticError(f"{name}: invalid UTF-8") from exc
             if text.startswith("\ufeff"):
                 text = text[1:]
+            if not text.endswith(("\n", "\r")):
+                text += "\n"
 
             column_names = _header_names(text, name)
             column_types = {column: pa.string() for column in column_names}
             try:
                 table = pacsv.read_csv(
                     pa.BufferReader(text.encode("utf-8")),
+                    parse_options=pacsv.ParseOptions(newlines_in_values=True),
                     convert_options=pacsv.ConvertOptions(
                         column_types=column_types,
                         strings_can_be_null=True,
@@ -325,7 +328,7 @@ def sync_static(
         sha12 = sha[:12]
         existing = next((row for row in rows if row["sha256"] == sha), None)
         if existing is not None:
-            existing["etag"] = result.etag
+            existing["etag"] = result.response_etag
             existing["last_modified"] = result.last_modified
             existing["last_checked_at"] = now()
             write_versions(data_dir, rows)
@@ -359,7 +362,7 @@ def sync_static(
                 "feed_start_date": metadata.feed_start_date,
                 "feed_end_date": metadata.feed_end_date,
                 "zip_bytes": len(zip_bytes),
-                "etag": result.etag,
+                "etag": result.response_etag,
                 "last_modified": result.last_modified,
                 "first_seen_at": checked_at,
                 "last_checked_at": checked_at,
