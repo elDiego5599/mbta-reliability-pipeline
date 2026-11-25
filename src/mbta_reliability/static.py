@@ -32,6 +32,11 @@ MEMBER_NAME = re.compile(r"^[a-z0-9_]+\.txt$")
 
 ZIP_NAME = "MBTA_GTFS.zip"
 
+# About 13 and 7 times the real feed (19 MB zip, 138 MB unpacked, 32 members, 2026-11).
+STATIC_MAX_BYTES = 256 * 2**20
+MAX_UNCOMPRESSED_BYTES = 2**30
+MAX_MEMBERS = 200
+
 VERSIONS_SCHEMA = pa.schema(
     [
         pa.field("sha12", pa.string()),
@@ -59,7 +64,9 @@ class FeedInfo(NamedTuple):
 
 
 STATIC_URL = "https://cdn.mbta.com/MBTA_GTFS.zip"
-STATIC_FEED = Feed("static", STATIC_URL, interval_s=86400, use_etag=True)
+STATIC_FEED = Feed(
+    "static", STATIC_URL, interval_s=86400, use_etag=True, max_bytes=STATIC_MAX_BYTES
+)
 
 
 class SyncResult(NamedTuple):
@@ -99,6 +106,14 @@ def read_tables(zip_bytes: bytes) -> dict[str, pa.Table]:
         if len(set(names)) != len(names):
             duplicate = next(name for name in names if names.count(name) > 1)
             raise StaticError(f"duplicate zip member: {duplicate}")
+        if len(names) > MAX_MEMBERS:
+            raise StaticError(f"zip has {len(names)} members, above the limit of {MAX_MEMBERS}")
+        # zipfile stops each member at its declared size and fails the CRC if it is longer.
+        expanded = sum(info.file_size for info in archive.infolist())
+        if expanded > MAX_UNCOMPRESSED_BYTES:
+            raise StaticError(
+                f"zip expands to {expanded} bytes, above the limit of {MAX_UNCOMPRESSED_BYTES}"
+            )
 
         tables: dict[str, pa.Table] = {}
         for name in sorted(names):

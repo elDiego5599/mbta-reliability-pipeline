@@ -10,6 +10,11 @@ import httpx
 MAX_RETRIES = 3
 BACKOFF_BASE_S = 1.0
 RETRYABLE_STATUSES = {429} | set(range(500, 600))
+REALTIME_MAX_BYTES = 32 * 2**20
+
+
+class ResponseTooLarge(Exception):
+    """The decoded response body exceeds the feed's size limit."""
 
 
 @dataclass(frozen=True)
@@ -18,6 +23,7 @@ class Feed:
     url: str
     interval_s: float
     use_etag: bool = False
+    max_bytes: int = REALTIME_MAX_BYTES
 
 
 @dataclass(frozen=True)
@@ -50,7 +56,8 @@ def fetch_feed(
 ) -> FetchResult:
     """Fetch a feed, retrying transport errors, 429 and 5xx with full-jitter backoff.
 
-    A 304 or any other non-200 status ends the fetch without a payload.
+    A 304 or any other non-200 status ends the fetch without a payload. A decoded body
+    larger than `feed.max_bytes` is dropped and not retried.
     """
     rng = rng or random.Random()
     headers = {"If-None-Match": etag} if feed.use_etag and etag else {}
@@ -59,15 +66,26 @@ def fetch_feed(
     for n in range(1, MAX_RETRIES + 2):
         at = now()
         started = time.perf_counter()
-        status, error, content = None, None, b""
+        status, error, content, size = None, None, b"", 0
         try:
-            response = client.get(feed.url, headers=headers)
-            status, content = response.status_code, response.content
+            with client.stream("GET", feed.url, headers=headers) as response:
+                status = response.status_code
+                chunks = []
+                for chunk in response.iter_bytes():
+                    size += len(chunk)
+                    if size > feed.max_bytes:
+                        raise ResponseTooLarge
+                    chunks.append(chunk)
+                content = b"".join(chunks)
+        except ResponseTooLarge:
+            error = ResponseTooLarge.__name__
         except httpx.TransportError as exc:
             error = type(exc).__name__
         latency_ms = round((time.perf_counter() - started) * 1000)
-        result.attempts.append(Attempt(n, at, status, len(content), latency_ms, error))
+        result.attempts.append(Attempt(n, at, status, size, latency_ms, error))
 
+        if error == ResponseTooLarge.__name__:
+            return result
         if status == 200:
             result.payload = content
             if feed.use_etag:
