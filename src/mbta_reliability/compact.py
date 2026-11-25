@@ -26,44 +26,52 @@ def _parse_hour(text: str) -> datetime:
         raise argparse.ArgumentTypeError(f"expected YYYY-MM-DDTHH (UTC), got {text!r}") from None
 
 
+_DATE_DIR = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
+_HOUR_DIR = re.compile(r"hour=(\d{2})")
+
+
 def pending_hours(data_dir: Path, feed: str, now: datetime) -> list[datetime]:
+    """Closed UTC hours of a feed that have bronze and no silver yet, oldest first."""
     feed_dir = Path(data_dir) / "bronze" / feed
     if not feed_dir.is_dir():
         return []
-
-    date_pattern = re.compile(r"^date=(\d{4}-\d{2}-\d{2})$")
-    hour_pattern = re.compile(r"^hour=(\d{2})$")
     pending: list[datetime] = []
     for date_dir in feed_dir.iterdir():
-        if not date_dir.is_dir():
-            continue
-        date_match = date_pattern.fullmatch(date_dir.name)
-        if date_match is None:
+        date_match = _DATE_DIR.fullmatch(date_dir.name)
+        if date_match is None or not date_dir.is_dir():
             continue
         for hour_dir in date_dir.iterdir():
-            if not hour_dir.is_dir():
-                continue
-            hour_match = hour_pattern.fullmatch(hour_dir.name)
-            if hour_match is None:
+            hour_match = _HOUR_DIR.fullmatch(hour_dir.name)
+            if hour_match is None or not hour_dir.is_dir():
                 continue
             try:
-                hour_start = datetime.strptime(
-                    f"{date_match.group(1)}T{hour_match.group(1)}",
-                    "%Y-%m-%dT%H",
+                start = datetime.strptime(
+                    f"{date_match[1]}T{hour_match[1]}", "%Y-%m-%dT%H"
                 ).replace(tzinfo=UTC)
             except ValueError:
                 continue
-            if now < hour_start + timedelta(hours=1) + CLOSE_GRACE:
-                continue
-            if silver_path(
-                data_dir,
-                feed,
-                f"{hour_start:%Y-%m-%d}",
-                hour_start.hour,
-            ).is_file():
-                continue
-            pending.append(hour_start)
+            closed = now >= start + timedelta(hours=1) + CLOSE_GRACE
+            if closed and not silver_path(data_dir, feed, date_match[1], start.hour).exists():
+                pending.append(start)
     return sorted(pending)
+
+
+def _compact(data_dir: Path, feed: str, hour: datetime, prefix: str) -> bool:
+    """Compact one feed hour and print the outcome; return False if it failed."""
+    try:
+        result = compact_hour(data_dir, feed, f"{hour:%Y-%m-%d}", hour.hour)
+    except CompactionError as exc:
+        print(f"{prefix} failed: {exc}")
+        return False
+    except Exception as exc:
+        print(f"{prefix} failed: {type(exc).__name__}: {exc}")
+        return False
+    if result is None:
+        print(f"{prefix} empty")
+    else:
+        path, n_files = result
+        print(f"{prefix} written {pq.read_metadata(path).num_rows} rows from {n_files} files")
+    return True
 
 
 def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = None) -> int:
@@ -71,9 +79,12 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = Non
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--hour", type=_parse_hour, help="UTC hour, YYYY-MM-DDTHH")
-    mode.add_argument("--pending", action="store_true", help="compact all closed pending hours")
+    mode.add_argument(
+        "--pending", action="store_true", help="compact every closed hour that has no silver yet"
+    )
     parser.add_argument("--feed", choices=list(FEEDS), help="compact only this feed")
     args = parser.parse_args(argv)
+    feeds = [args.feed] if args.feed else list(FEEDS)
 
     if not (args.data_dir / "bronze").is_dir():
         if args.pending:
@@ -82,61 +93,20 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = Non
         parser.error(f"no bronze directory under {args.data_dir}")
 
     current = now() if now is not None else datetime.now(UTC)
-
+    ok = True
     if args.pending:
-        found_pending = False
-        failed = False
-        for feed in [args.feed] if args.feed else list(FEEDS):
-            for hour in pending_hours(args.data_dir, feed, current):
-                found_pending = True
-                prefix = f"{hour:%Y-%m-%dT%H} {feed}"
-                try:
-                    result = compact_hour(
-                        args.data_dir,
-                        feed,
-                        f"{hour:%Y-%m-%d}",
-                        hour.hour,
-                    )
-                except CompactionError as exc:
-                    failed = True
-                    print(f"{prefix} failed: {exc}")
-                    continue
-                except Exception as exc:
-                    failed = True
-                    print(f"{prefix} failed: {type(exc).__name__}: {exc}")
-                    continue
-                if result is None:
-                    print(f"{prefix} empty")
-                else:
-                    path, n_files = result
-                    print(
-                        f"{prefix} written "
-                        f"{pq.read_metadata(path).num_rows} rows from {n_files} files"
-                    )
-        if not found_pending:
+        jobs = [
+            (feed, hour) for feed in feeds for hour in pending_hours(args.data_dir, feed, current)
+        ]
+        if not jobs:
             print("nothing pending")
-        return EXIT_FAILED if failed else 0
+        for feed, hour in jobs:
+            ok &= _compact(args.data_dir, feed, hour, f"{hour:%Y-%m-%dT%H} {feed}")
+        return 0 if ok else EXIT_FAILED
 
     if current < args.hour + timedelta(hours=1) + CLOSE_GRACE:
         print(f"hour {args.hour:%Y-%m-%dT%H} is not closed yet; nothing compacted")
         return EXIT_NOT_CLOSED
-
-    date = f"{args.hour:%Y-%m-%d}"
-    failed = False
-    for feed in [args.feed] if args.feed else list(FEEDS):
-        try:
-            result = compact_hour(args.data_dir, feed, date, args.hour.hour)
-        except CompactionError as exc:
-            failed = True
-            print(f"{feed} failed: {exc}")
-            continue
-        except Exception as exc:
-            failed = True
-            print(f"{feed} failed: {type(exc).__name__}: {exc}")
-            continue
-        if result is None:
-            print(f"{feed} empty")
-        else:
-            path, n_files = result
-            print(f"{feed} written {pq.read_metadata(path).num_rows} rows from {n_files} files")
-    return EXIT_FAILED if failed else 0
+    for feed in feeds:
+        ok &= _compact(args.data_dir, feed, args.hour, feed)
+    return 0 if ok else EXIT_FAILED
