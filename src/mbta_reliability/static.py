@@ -33,7 +33,7 @@ class FeedInfo(NamedTuple):
 def _header_names(text: str, member: str) -> list[str]:
     if not text:
         raise StaticError(f"{member}: empty or missing column header")
-    header_line = text.splitlines()[0]
+    header_line = text.partition("\n")[0].rstrip("\r")
     try:
         names = next(csv.reader([header_line], strict=True))
     except (csv.Error, StopIteration) as exc:
@@ -87,7 +87,7 @@ def read_tables(zip_bytes: bytes) -> dict[str, pa.Table]:
                         null_values=[""],
                     ),
                 )
-            except (pa.ArrowInvalid, pa.ArrowException) as exc:
+            except pa.ArrowException as exc:
                 raise StaticError(f"{name}: invalid CSV or ragged row") from exc
 
             tables[name[:-4]] = table
