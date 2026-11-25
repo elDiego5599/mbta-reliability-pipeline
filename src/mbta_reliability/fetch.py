@@ -34,6 +34,7 @@ class Attempt:
 class FetchResult:
     payload: bytes | None
     etag: str | None
+    last_modified: str | None = None
     attempts: list[Attempt] = field(default_factory=list)
 
 
@@ -70,6 +71,7 @@ def fetch_feed(
             result.payload = content
             if feed.use_etag:
                 result.etag = response.headers.get("ETag", etag)
+                result.last_modified = response.headers.get("Last-Modified")
             return result
         retryable = error is not None or status in RETRYABLE_STATUSES
         if not retryable or n > MAX_RETRIES:

@@ -41,6 +41,21 @@ def test_success_on_first_attempt(fake_sleep):
     assert fake_sleep.calls == []
 
 
+def test_last_modified_kept_with_etag(fake_sleep):
+    client = client_for(
+        httpx.Response(
+            200,
+            content=b"abc",
+            headers={"ETag": '"e1"', "Last-Modified": "Mon, 23 Nov 2026 21:51:03 GMT"},
+        )
+    )
+
+    result = run(client, fake_sleep)
+
+    assert result.etag == '"e1"'
+    assert result.last_modified == "Mon, 23 Nov 2026 21:51:03 GMT"
+
+
 def test_retries_server_error_then_succeeds(fake_sleep):
     client = client_for(httpx.Response(503), httpx.Response(200, content=b"ok"))
 

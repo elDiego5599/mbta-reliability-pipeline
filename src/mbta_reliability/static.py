@@ -4,18 +4,24 @@ import csv
 import hashlib
 import io
 import os
+import random
 import re
 import shutil
 import tempfile
+import time
 import zipfile
 import zlib
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, NamedTuple
 
+import httpx
 import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 
+from mbta_reliability.fetch import Feed, fetch_feed
 from mbta_reliability.silver import (
     PARQUET_COMPRESSION,
     PARQUET_COMPRESSION_LEVEL,
@@ -50,6 +56,17 @@ class FeedInfo(NamedTuple):
     feed_version: str
     feed_start_date: str | None
     feed_end_date: str | None
+
+
+STATIC_URL = "https://cdn.mbta.com/MBTA_GTFS.zip"
+STATIC_FEED = Feed("static", STATIC_URL, interval_s=86400, use_etag=True)
+
+
+class SyncResult(NamedTuple):
+    outcome: str
+    sha12: str
+    feed_version: str
+    tables: int
 
 
 def _header_names(text: str, member: str) -> list[str]:
@@ -256,3 +273,106 @@ def current_etag(rows: list[dict]) -> str | None:
         return None
     newest = max(rows, key=lambda row: (row["last_checked_at"], row["sha12"]))
     return newest["etag"]
+
+
+def sync_static(
+    client: httpx.Client,
+    data_dir: Path,
+    *,
+    now: Callable[[], datetime],
+    sleep: Callable[[float], None] = time.sleep,
+    rng: random.Random | None = None,
+) -> SyncResult:
+    """Fetch and publish the static GTFS feed once per distinct zip."""
+    try:
+        remove_temp_dirs(data_dir)
+        rows = read_versions(data_dir)
+        etag = current_etag(rows)
+        result = fetch_feed(
+            client,
+            STATIC_FEED,
+            etag=etag,
+            sleep=sleep,
+            rng=rng,
+        )
+
+        last_attempt = result.attempts[-1] if result.attempts else None
+        if last_attempt is not None and last_attempt.status == 304:
+            if not rows:
+                raise StaticError("304 response from static feed without a versions index")
+            current = max(rows, key=lambda row: (row["last_checked_at"], row["sha12"]))
+            checked_at = now()
+            current["last_checked_at"] = checked_at
+            write_versions(data_dir, rows)
+            return SyncResult(
+                outcome="unchanged",
+                sha12=current["sha12"],
+                feed_version=current["feed_version"],
+                tables=0,
+            )
+
+        if result.payload is None:
+            if last_attempt is None:
+                raise StaticError("static feed fetch failed with no HTTP attempt")
+            if last_attempt.status is not None:
+                reason = str(last_attempt.status)
+            else:
+                reason = last_attempt.error or "unknown error"
+            raise StaticError(f"static feed fetch failed: {reason}")
+
+        zip_bytes = result.payload
+        sha = sha256_hex(zip_bytes)
+        sha12 = sha[:12]
+        existing = next((row for row in rows if row["sha256"] == sha), None)
+        if existing is not None:
+            existing["etag"] = result.etag
+            existing["last_modified"] = result.last_modified
+            existing["last_checked_at"] = now()
+            write_versions(data_dir, rows)
+            return SyncResult(
+                outcome="same_content",
+                sha12=existing["sha12"],
+                feed_version=existing["feed_version"],
+                tables=0,
+            )
+
+        tables = read_tables(zip_bytes)
+        metadata = feed_info(tables)
+        target = version_dir(data_dir, sha12)
+        if target.exists():
+            zip_path = target / ZIP_NAME
+            try:
+                stored_bytes = zip_path.read_bytes()
+            except OSError as exc:
+                raise StaticError(f"feed_version={sha12}: cannot read {zip_path}") from exc
+            if sha256_hex(stored_bytes) != sha:
+                raise StaticError(f"feed_version={sha12}: stored {ZIP_NAME} hash differs")
+        else:
+            publish_version(data_dir, zip_bytes, tables)
+
+        checked_at = now()
+        rows.append(
+            {
+                "sha12": sha12,
+                "sha256": sha,
+                "feed_version": metadata.feed_version,
+                "feed_start_date": metadata.feed_start_date,
+                "feed_end_date": metadata.feed_end_date,
+                "zip_bytes": len(zip_bytes),
+                "etag": result.etag,
+                "last_modified": result.last_modified,
+                "first_seen_at": checked_at,
+                "last_checked_at": checked_at,
+            }
+        )
+        write_versions(data_dir, rows)
+        return SyncResult(
+            outcome="written",
+            sha12=sha12,
+            feed_version=metadata.feed_version,
+            tables=len(tables),
+        )
+    except StaticError:
+        raise
+    except Exception as exc:
+        raise StaticError(f"static sync failed: {type(exc).__name__}: {exc}") from exc
