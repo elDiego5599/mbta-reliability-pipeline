@@ -14,6 +14,7 @@ dependencies = [
 [project.scripts]
 mbta-poller = "mbta_reliability.poller:main"
 mbta-compact = "mbta_reliability.compact:main"
+mbta-static = "mbta_reliability.static_cli:main"
 
 [dependency-groups]
 dev = [

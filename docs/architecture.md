@@ -72,7 +72,7 @@ flowchart LR
 |---|---|---|---|
 | `poller` | Fetches the three realtime feeds on their own cadence, retries with backoff, writes each snapshot atomically, logs every attempt. | Long-lived process kept alive by launchd. | `bronze/`, `fetch_log/` |
 | `compact` | Parses one hour of bronze snapshots into one Parquet file per feed, dropping exact duplicates. Overwrites that hour. | Dagster, hourly at :05 for the previous hour. | `silver/` |
-| `static` | Downloads the static GTFS zip when its ETag changes and stores each `feed_version` as Parquet. | Dagster, daily at 04:00 Boston time. | `static/` |
+| `static` | Downloads `MBTA_GTFS.zip` when its ETag changes and stores each `feed_version` as Parquet. | Dagster, daily at 04:00 Boston time. | `static/` |
 | dbt project | Staging, intermediate and mart models in DuckDB, plus tests. | Dagster, after each daily partition closes. | `warehouse.duckdb` |
 | `export` | Loads the mart tables into BigQuery, replacing them. | Dagster, daily after dbt. | BigQuery dataset |
 | Dashboard | Looker Studio report on the BigQuery marts. | Google, free. | Nothing |
@@ -89,6 +89,7 @@ data/
   bronze/<feed>/date=YYYY-MM-DD/hour=HH/<header_ts>.pb.zst
   fetch_log/date=YYYY-MM-DD/<pid>-<start_ts>.jsonl
   silver/<feed>/date=YYYY-MM-DD/hour=HH.parquet
+  static/feed_version=<sha256-12>/MBTA_GTFS.zip
   static/feed_version=<sha256-12>/<table>.parquet
   static/versions.parquet
   warehouse.duckdb
