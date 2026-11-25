@@ -125,3 +125,45 @@ def test_retryable_statuses(status, fake_sleep):
     client = client_for(httpx.Response(status), httpx.Response(200, content=b"ok"))
 
     assert run(client, fake_sleep).payload == b"ok"
+
+
+def test_default_size_limits_cover_real_feeds():
+    from mbta_reliability.poller import default_feeds
+    from mbta_reliability.static import STATIC_FEED
+
+    assert all(feed.max_bytes == 32 * 2**20 for feed in default_feeds(30, 300, 60))
+    assert STATIC_FEED.max_bytes == 256 * 2**20
+
+
+def test_body_at_the_limit_is_accepted(fake_sleep):
+    feed = Feed(name="VP", url="https://cdn.example/VP.pb", interval_s=30, max_bytes=4)
+    client = client_for(httpx.Response(200, content=b"abcd"))
+
+    result = fetch_feed(client, feed, sleep=fake_sleep, rng=random.Random(0))
+
+    assert result.payload == b"abcd"
+
+
+def test_body_above_the_limit_is_dropped_and_not_retried(fake_sleep):
+    feed = Feed(name="VP", url="https://cdn.example/VP.pb", interval_s=30, max_bytes=4)
+    client = client_for(httpx.Response(200, content=b"abcde"))
+
+    result = fetch_feed(client, feed, sleep=fake_sleep, rng=random.Random(0))
+
+    assert result.payload is None
+    assert [(a.status, a.error) for a in result.attempts] == [(200, "ResponseTooLarge")]
+    assert fake_sleep.calls == []
+
+
+def test_limit_applies_to_the_decoded_body(fake_sleep):
+    import gzip
+
+    feed = Feed(name="VP", url="https://cdn.example/VP.pb", interval_s=30, max_bytes=1000)
+    bomb = gzip.compress(b"\0" * 100_000)
+    assert len(bomb) < 1000
+    client = client_for(httpx.Response(200, content=bomb, headers={"Content-Encoding": "gzip"}))
+
+    result = fetch_feed(client, feed, sleep=fake_sleep, rng=random.Random(0))
+
+    assert result.payload is None
+    assert result.attempts[0].error == "ResponseTooLarge"

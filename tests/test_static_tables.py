@@ -7,6 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from mbta_reliability import static
 from mbta_reliability.static import FeedInfo, StaticError, feed_info, read_tables, write_parquet
 
 
@@ -142,3 +143,24 @@ def test_write_parquet_is_byte_identical(gtfs_zip):
     write_parquet(table, second)
     assert first.getvalue() == second.getvalue()
     assert pq.read_table(io.BytesIO(first.getvalue())).equals(table)
+
+
+def test_rejects_zip_that_expands_above_the_limit(gtfs_zip, monkeypatch):
+    monkeypatch.setattr(static, "MAX_UNCOMPRESSED_BYTES", 1000)
+    zipped = gtfs_zip({"stops.txt": "stop_id\n" + "0\n" * 600})
+    with pytest.raises(StaticError, match="expands to"):
+        read_tables(zipped)
+
+
+def test_rejects_too_many_members(gtfs_zip, monkeypatch):
+    monkeypatch.setattr(static, "MAX_MEMBERS", 2)
+    with pytest.raises(StaticError, match="members"):
+        read_tables(gtfs_zip({"a.txt": "a\n", "b.txt": "b\n", "c.txt": "c\n"}))
+
+
+def test_member_that_understates_its_size_is_rejected(gtfs_zip):
+    zipped = bytearray(gtfs_zip({"stops.txt": "stop_id\n" + "0\n" * 5000}))
+    central = zipped.index(b"PK\x01\x02")
+    struct.pack_into("<I", zipped, central + 24, 10)
+    with pytest.raises(StaticError, match=re.escape("stops.txt")):
+        read_tables(bytes(zipped))
