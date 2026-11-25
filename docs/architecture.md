@@ -46,8 +46,7 @@ flowchart LR
     end
 
     subgraph Serve["Serving"]
-        BQ["BigQuery sandbox<br/>marts only"]
-        LS["Looker Studio<br/>public dashboard"]
+        EV["Evidence<br/>static site, daily build"]
         RD["README findings<br/>static charts"]
     end
 
@@ -57,13 +56,12 @@ flowchart LR
     GT --> ST
     B -->|hourly compaction| S
     S & ST & FL --> STG --> INT --> MRT
-    MRT -->|daily export| BQ --> LS
+    MRT --> EV
     MRT --> RD
 
     D["Dagster<br/>schedules, asset checks"] -.-> S
     D -.-> ST
     D -.-> STG
-    D -.-> BQ
 ```
 
 ## Components
@@ -75,8 +73,7 @@ flowchart LR
 | `static` | Downloads `MBTA_GTFS.zip` when its ETag changes and stores each `feed_version` as Parquet. | launchd agent daily at 04:00 local time until Dagster takes over. | `static/` |
 | `prune` | Deletes bronze snapshots older than 14 days once their silver hour lists them, recompacting first when it does not. | launchd agent daily at 04:30 local time, dry run until the owner switches on `--apply`. | `bronze/` (deletes only), `silver/` (recompaction) |
 | dbt project | Staging, intermediate and mart models in DuckDB, plus tests. | Dagster, after each daily partition closes. | `warehouse.duckdb` |
-| `export` | Loads the mart tables into BigQuery, replacing them. | Dagster, daily after dbt. | BigQuery dataset |
-| Dashboard | Looker Studio report on the BigQuery marts. | Google, free. | Nothing |
+| Dashboard | Evidence project that queries the aggregated DuckDB marts and builds a static site; query results are embedded in the build. | Daily static build, published on free hosting (GitHub Pages first choice). | Static site |
 
 The poller is deliberately **outside** the orchestrator. A 30 second loop is a
 service, not a batch job; scheduling it as 2,880 runs a day would make the
@@ -117,9 +114,9 @@ in the code depends on macOS; launchd is replaced by a systemd unit.
 |---|---|
 | [0001](adr/0001-protobuf-cdn-feeds.md) | Use the standard protobuf feeds from the MBTA CDN, not the V3 API or the enhanced JSON. |
 | [0002](adr/0002-bronze-silver-files.md) | Archive raw snapshots as zstd protobuf, compact hourly to Parquet. |
-| [0003](adr/0003-duckdb-then-bigquery.md) | DuckDB is the warehouse; BigQuery sandbox only serves the marts. Postgres rejected. |
+| [0003](adr/0003-duckdb-warehouse.md) | DuckDB is the only warehouse. Postgres rejected; BigQuery dropped on 2026-11-25. |
 | [0004](adr/0004-dagster-over-airflow.md) | Dagster over Airflow for orchestration. |
 | [0005](adr/0005-headway-at-timepoints.md) | Measure headways where vehicles cross a fixed mid-route timepoint; nearest-rank percentiles. |
-| [0006](adr/0006-looker-studio-dashboard.md) | Looker Studio on BigQuery marts for the public dashboard. |
+| [0006](adr/0006-evidence-dashboard.md) | Evidence static site on the DuckDB marts for the public dashboard; replaced Looker Studio on BigQuery on 2026-11-25. |
 | [0007](adr/0007-runtime-mac-then-vm.md) | Run on the Mac with launchd first, a small VM later. |
 | [0008](adr/0008-bronze-retention.md) | Delete bronze after 14 days only when silver lists every snapshot of the hour. |

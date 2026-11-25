@@ -11,8 +11,8 @@ how far from schedule does a trip run.
 
 ## Stack
 
-Python poller, Parquet data lake, DuckDB, dbt, Dagster, BigQuery sandbox and
-Looker Studio. Every choice is explained in an
+Python poller, Parquet data lake, DuckDB, dbt, Dagster, and an Evidence
+dashboard built as a static site from the DuckDB marts. Every choice is explained in an
 [architecture decision record](docs/adr/).
 
 ## Docs

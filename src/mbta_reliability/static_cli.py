@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 
+from mbta_reliability.logs import rotate_stdout
 from mbta_reliability.poller import USER_AGENT
 from mbta_reliability.static import StaticError, sync_static
 
@@ -30,6 +31,7 @@ def main(
             headers={"User-Agent": USER_AGENT},
         )
 
+    rotate_stdout()
     checked_at = now if now is not None else lambda: datetime.now(UTC)
     print(f"run at {checked_at():%Y-%m-%dT%H:%M:%SZ}")
     try:

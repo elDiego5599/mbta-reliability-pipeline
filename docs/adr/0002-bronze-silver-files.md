@@ -31,7 +31,7 @@ orchestrator, builds silver and overwrites the hour whole.
 - The poller does one thing and has almost no dependencies, so it rarely
   breaks. Parsing errors cannot stop data collection.
 - Hour-sized Parquet files (tens of thousands to about 90,000 rows) are a good
-  size for DuckDB and for any later load into BigQuery.
+  size for DuckDB.
 - Overwriting a whole hour makes compaction idempotent without bookkeeping.
 
 ## Alternatives rejected
