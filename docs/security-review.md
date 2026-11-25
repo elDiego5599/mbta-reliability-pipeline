@@ -118,6 +118,7 @@ next restart. That is the same user, so it is not a boundary, but it is why the
 checkout must only ever pull reviewed commits from `main`.
 
 Not security, but worth a later task: `data/logs/*.log` grow without rotation.
+Resolved on 2026-11-25: each job rotates its own log at 10 MB, keeping five old files.
 
 ### 5. Informational: secrets
 

@@ -15,12 +15,14 @@ import httpx
 
 from mbta_reliability.bronze import header_timestamp, write_snapshot
 from mbta_reliability.fetch import Feed, fetch_feed
+from mbta_reliability.logs import setup_json_logging
 
 STALE_AFTER_S = 120
 CDN = "https://cdn.mbta.com/realtime"
 USER_AGENT = "mbta-reliability-pipeline (+https://github.com/elDiego5599/mbta-reliability-pipeline)"
 
 logger = logging.getLogger("poller")
+LEVELS = {"retry": logging.WARNING, "failed": logging.ERROR, "invalid": logging.ERROR}
 
 
 class FetchLog:
@@ -31,6 +33,8 @@ class FetchLog:
         self.name = f"{pid}-{start_ts}.jsonl"
 
     def append(self, row: dict) -> None:
+        """Write the row to the day's file and log it as a `fetch` event."""
+        logger.log(LEVELS.get(row.get("outcome"), logging.INFO), "fetch", extra={"fields": row})
         day = datetime.fromtimestamp(row["attempt_at"], UTC).strftime("%Y-%m-%d")
         path = self.root / f"date={day}" / self.name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +116,7 @@ def run(data_dir: Path, feeds: list[Feed]) -> None:
             try:
                 poll_once(client, feed, state, data_dir=data_dir, log=fetch_log)
             except Exception:
-                logger.exception("poll of %s failed", feed.name)
+                logger.exception("error", extra={"fields": {"feed": feed.name}})
             due[feed.name] = next_due(due[feed.name], feed.interval_s, time.time())
 
 
@@ -123,7 +127,12 @@ def main() -> None:
     parser.add_argument("--trip-updates-s", type=float, default=300)
     parser.add_argument("--alerts-s", type=float, default=60)
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    setup_json_logging()
     feeds = default_feeds(args.vehicle_positions_s, args.trip_updates_s, args.alerts_s)
-    logger.info("polling %s into %s", [f.name for f in feeds], args.data_dir)
+    fields = {
+        "pid": os.getpid(),
+        "data_dir": str(args.data_dir),
+        "feeds": {f.name: f.interval_s for f in feeds},
+    }
+    logger.info("start", extra={"fields": fields})
     run(args.data_dir, feeds)

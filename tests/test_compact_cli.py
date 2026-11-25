@@ -252,3 +252,12 @@ def test_pending_skips_hour_without_snapshot_files(tmp_path, capsys, monkeypatch
     monkeypatch.setattr(compact, "compact_hour", should_not_run)
     assert main(_pending(tmp_path), now=now) == 0
     assert "nothing pending" in capsys.readouterr().out
+
+
+def test_each_run_rotates_its_log_before_printing(tmp_path, capsys, monkeypatch):
+    calls = []
+    monkeypatch.setattr(compact, "rotate_stdout", lambda: calls.append(capsys.readouterr().out))
+
+    main(_pending(tmp_path), now=now)
+
+    assert calls == [""]
