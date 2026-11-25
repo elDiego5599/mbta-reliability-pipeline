@@ -246,10 +246,13 @@ clamped    = own < observation_ts
     header 130 -> own 90 then 130, not clamped.
   - `ut_vp_occupancy_only`: second version changes only
     `occupancy_status` -> own 90 for both.
-  - `ut_vp_late_old_report`: (ts 200, header 210), then (ts 150, header
-    260) on the same trip -> second row `observation_ts` 200, clamped true.
-  - `ut_vp_new_trip_restarts`: trip T1 at ts 200, trip T2 at ts 150 ->
-    T2 observation 150, not clamped.
+  - `ut_vp_late_old_report`: (ts 90, stop 1, header 100), (ts 90, stop 2,
+    header 130), then (ts 120, stop 2, header 150) on the same trip -> own
+    120, `observation_ts` 130, clamped true. (Corrected during Task 5: in
+    the canonical order (`timestamp`, `header_ts`) a report with an older
+    `timestamp` sorts first, so the earlier case could never clamp.)
+  - `ut_vp_new_trip_restarts`: the first two rows of the case above on
+    T1, the third on T2 -> T2 observation 120, not clamped.
   - `ut_vp_no_trip`: null `trip__trip_id` rows get observation times.
   - `ut_vp_report_age`: header 130, ts 90 -> `report_age_s` 40.
 - [ ] **Step 2:** Run `dbt test -s stg_vehicle_positions,test_type:unit`:

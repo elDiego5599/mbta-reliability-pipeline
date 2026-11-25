@@ -25,3 +25,29 @@ models:
           - accepted_values:
               arguments:
                 values: [SCHEDULED, SKIPPED, NO_DATA, UNSCHEDULED]
+
+  - name: stg_vehicle_positions
+    description: >-
+      One row per vehicle report version (ADR 0009). Rows equal except
+      header_ts collapse to the earliest, across hours. own_observation_ts is
+      when the feed made the version, observation_ts the running maximum of it
+      per vehicle and trip in (timestamp, header_ts) order, and
+      observation_time_clamped marks rows where the two differ.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [vehicle__id, timestamp, header_ts]
+    columns:
+      - name: vehicle__id
+        data_tests: [not_null]
+      - name: timestamp
+        data_tests: [not_null]
+      - name: header_ts
+        data_tests: [not_null]
+      - name: observation_ts
+        data_tests: [not_null]
+      - name: current_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [INCOMING_AT, STOPPED_AT, IN_TRANSIT_TO]
