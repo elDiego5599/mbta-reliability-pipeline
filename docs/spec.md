@@ -182,7 +182,7 @@ service day.
 
 | Layer | Model | Grain |
 |---|---|---|
-| staging | `stg_vehicle_positions` | one vehicle report |
+| staging | `stg_vehicle_positions` | one version of a vehicle report: (`vehicle__id`, `timestamp`, `header_ts`), see below |
 | staging | `stg_trip_updates` | one stop time update per snapshot |
 | staging | `stg_alerts`, `stg_alert_informed_entities` | one alert version; one affected entity |
 | staging | `stg_static__trips`, `__stop_times`, `__stops`, `__routes`, `__route_patterns`, `__shapes`, `__calendar`, `__calendar_dates` | as in GTFS, plus `feed_version` |
@@ -198,19 +198,35 @@ service day.
 | marts | `agg_route_hour_reliability` | one route, direction, service date and hour |
 | marts | `dim_routes`, `dim_stops` | current names, colours and modes |
 
+`stg_vehicle_positions` grain (amended 2026-11-25, see
+[ADR 0009](adr/0009-vehicle-position-versions.md)): MBTA re-sends a vehicle
+with the same `timestamp` while it updates status, stop, trip or occupancy, so
+(`vehicle__id`, `timestamp`) is not unique. Staging keeps one row per distinct
+version, keyed by (`vehicle__id`, `timestamp`, `header_ts`), where
+`header_ts` is the first snapshot that carried it. Rows identical except for
+`header_ts` collapse to the smallest `header_ts`, also across hours. A
+vehicle's reports are ordered by (`timestamp`, `header_ts`).
+
 ### 6.2 Stop crossings
 
 For each vehicle on a trip, consecutive reports are ordered by
-`vehicle_timestamp`. A crossing of stop *s* is recorded when the report's
-`current_stop_sequence` moves past *s*'s sequence:
+(`timestamp`, `header_ts`). Each report has an observation time: `timestamp`
+for the first version of a report, and `header_ts` for a later version that
+changes `stop_id`, `current_stop_sequence`, `current_status` or
+`trip__trip_id` (ADR 0009). The times below are observation times. A
+crossing of stop *s* is recorded when the report's `current_stop_sequence`
+moves past *s*'s sequence:
 
 1. If there is a `STOPPED_AT` report at *s*, the crossing time is the last such
-   report's timestamp (the departure).
+   report's observation time (the departure).
 2. Otherwise the time is interpolated between the last report before and the
    first report after, weighted by straight line distance to the stop.
 
 The interval between the two bracketing reports is kept as
-`crossing_uncertainty_s`. At 30 s polling it is normally 30 s or less.
+`crossing_uncertainty_s`. At 30 s polling it is normally 30 s or less. An
+observation time taken from `header_ts` is late by at most one poller
+interval (about 30 s, 60 s when a snapshot is missing), and that interval is
+added to `crossing_uncertainty_s`.
 
 ### 6.3 Tests
 
