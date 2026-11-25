@@ -17,6 +17,8 @@ from google.transit import gtfs_realtime_pb2
 PARQUET_COMPRESSION = "zstd"
 PARQUET_COMPRESSION_LEVEL = 3
 ROW_GROUP_ROWS = 1_000_000
+# Parquet key-value metadata listing the header_ts of every bronze file compaction read.
+HEADER_TS_KEY = b"mbta.bronze_header_ts"
 
 BRONZE_NAME = re.compile(r"^(\d+)\.pb\.zst$")
 
@@ -265,6 +267,8 @@ def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> tuple[Path,
         except (OSError, zstandard.ZstdError, DecodeError) as exc:
             raise CompactionError(f"cannot read bronze file {file.name}: {exc}") from exc
     table = pa.Table.from_pylist(dedup_sort(feed, rows), schema=feed_schema(feed))
+    read = json.dumps([header_ts for header_ts, _ in files], separators=(",", ":"))
+    table = table.replace_schema_metadata({HEADER_TS_KEY: read.encode()})
     path = silver_path(data_dir, feed, date, hour)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
@@ -286,3 +290,17 @@ def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> tuple[Path,
         Path(tmp).unlink(missing_ok=True)
         raise
     return path, len(files)
+
+
+def silver_header_ts(path: Path) -> list[int] | None:
+    """Header timestamps of the bronze files a silver file was built from, ascending.
+
+    None when the file is missing, unreadable, or was written before this list was recorded.
+    """
+    try:
+        metadata = pq.read_schema(path).metadata or {}
+    except (OSError, pa.ArrowInvalid):
+        return None
+    if HEADER_TS_KEY not in metadata:
+        return None
+    return json.loads(metadata[HEADER_TS_KEY])

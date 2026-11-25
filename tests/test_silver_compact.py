@@ -6,7 +6,13 @@ import zstandard
 from google.transit import gtfs_realtime_pb2
 
 from mbta_reliability import bronze
-from mbta_reliability.silver import CompactionError, compact_hour, feed_schema, silver_path
+from mbta_reliability.silver import (
+    CompactionError,
+    compact_hour,
+    feed_schema,
+    silver_header_ts,
+    silver_path,
+)
 
 HOUR = 1795532400  # 2026-11-24 15:00:00 UTC
 VP = "VehiclePositions"
@@ -169,3 +175,29 @@ def test_unknown_field_is_error_and_writes_nothing(tmp_path):
     with pytest.raises(CompactionError, match=r"1764000000\.pb\.zst.*unknown"):
         compact_hour(tmp_path, VP, "2026-11-24", 15)
     assert not silver_path(tmp_path, VP, "2026-11-24", 15).exists()
+
+
+def test_records_sorted_header_ts_of_files_read(feed_bytes, tmp_path):
+    # 999 sorts after 1000 by name string; the list must be in numeric order.
+    hour_dir = _hour_dir(tmp_path)
+    hour_dir.mkdir(parents=True)
+    for ts in (1000, 999, 1030):
+        (hour_dir / f"{ts}.pb.zst").write_bytes(zstandard.ZstdCompressor().compress(feed_bytes(ts)))
+    (hour_dir / ".tmp-abc").write_bytes(b"partial")
+    path, _ = compact_hour(tmp_path, VP, "2026-11-24", 15)
+    metadata = pq.read_schema(path).metadata
+    assert metadata[b"mbta.bronze_header_ts"] == b"[999,1000,1030]"
+    assert silver_header_ts(path) == [999, 1000, 1030]
+
+
+def test_silver_header_ts_is_none_without_metadata(tmp_path):
+    path = tmp_path / "legacy.parquet"
+    pq.write_table(feed_schema(VP).empty_table(), path)
+    assert silver_header_ts(path) is None
+
+
+def test_silver_header_ts_is_none_for_missing_or_unreadable_file(tmp_path):
+    assert silver_header_ts(tmp_path / "missing.parquet") is None
+    bad = tmp_path / "bad.parquet"
+    bad.write_bytes(b"not parquet")
+    assert silver_header_ts(bad) is None
