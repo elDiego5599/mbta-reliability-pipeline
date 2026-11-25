@@ -3,7 +3,7 @@
 set -euo pipefail
 
 domain="gui/$(id -u)"
-for agent in poller compact static; do
+for agent in poller compact static prune; do
   label="io.github.eldiego5599.mbta.$agent"
   launchctl bootout "$domain/$label" 2>/dev/null || true
   rm -f "$HOME/Library/LaunchAgents/$label.plist"

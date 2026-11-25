@@ -9,6 +9,7 @@ LABELS = {
     "poller": "io.github.eldiego5599.mbta.poller",
     "compact": "io.github.eldiego5599.mbta.compact",
     "static": "io.github.eldiego5599.mbta.static",
+    "prune": "io.github.eldiego5599.mbta.prune",
 }
 
 
@@ -28,7 +29,7 @@ def rendered_plists(tmp_path, script_root=ROOT):
     return out
 
 
-def test_renders_three_plists(tmp_path):
+def test_renders_one_plist_per_agent(tmp_path):
     out = rendered_plists(tmp_path)
     assert sorted(path.name for path in out.iterdir()) == sorted(
         f"{label}.plist" for label in LABELS.values()
@@ -102,6 +103,31 @@ def test_static_plist(tmp_path):
     assert plist["WorkingDirectory"] == str(ROOT)
     assert plist["StandardOutPath"] == f"{ROOT}/data/logs/static.log"
     assert plist["StandardErrorPath"] == f"{ROOT}/data/logs/static.log"
+
+
+def test_prune_plist_is_a_dry_run(tmp_path):
+    out = rendered_plists(tmp_path)
+    with (out / f"{LABELS['prune']}.plist").open("rb") as handle:
+        plist = plistlib.load(handle)
+
+    assert plist["Label"] == LABELS["prune"]
+    # No --apply until the owner has reviewed prune.log; see docs/operations.md.
+    assert plist["ProgramArguments"] == [
+        f"{ROOT}/.venv/bin/mbta-prune",
+        "--data-dir",
+        f"{ROOT}/data",
+    ]
+    assert plist["StartCalendarInterval"] == {"Hour": 4, "Minute": 30}
+    assert plist["RunAtLoad"] is True
+    assert "KeepAlive" not in plist
+    assert plist["WorkingDirectory"] == str(ROOT)
+    assert plist["StandardOutPath"] == f"{ROOT}/data/logs/prune.log"
+    assert plist["StandardErrorPath"] == f"{ROOT}/data/logs/prune.log"
+
+
+def test_uninstall_removes_every_agent():
+    text = (ROOT / "ops/launchd/uninstall.sh").read_text()
+    assert "for agent in poller compact static prune; do" in text
 
 
 def test_absolute_paths_are_repo_or_caffeinate(tmp_path):
