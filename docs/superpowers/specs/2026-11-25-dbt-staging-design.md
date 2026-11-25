@@ -1,6 +1,6 @@
 # dbt project and staging models: design
 
-Status: draft for review, 2026-11-25
+Status: approved by Diego, 2026-11-25
 
 ## Intent
 
@@ -178,7 +178,9 @@ Grain and key (ADR 0009): one distinct version of a vehicle report,
    `header_ts`, `snapshot_date` and the file name collapse to the row with
    the smallest `header_ts`. Equality is exact over all columns (including
    `multi_carriage_details` and `entity_id`), never a hash. An A, B, A
-   sequence keeps A and B, as silver does within an hour.
+   sequence keeps A and B, as silver does within an hour, so the return to
+   A is lost. This is consistent with ADR 0009 and silver, and rare in
+   practice.
 2. **Own observation time** (`own_observation_ts`). Within (`vehicle__id`,
    `timestamp`) ordered by `header_ts`, the first version is observed at
    `timestamp`. A later version whose `stop_id`, `current_stop_sequence`,
@@ -232,6 +234,17 @@ starts a new version. Columns:
 
 Times are only as precise as the snapshots: a change is known to have
 happened between `version_last_seen_ts` and `version_ended_ts`.
+
+Known limits:
+
+- Poller outage: if the poller is down for hours and an alert has the same
+  content before and after, it stays one version spanning the gap. The fetch
+  log is how a later model can detect the gap.
+- Empty snapshots: a snapshot with zero alerts leaves no rows in silver, so
+  it is missing from the snapshot sequence, and a moment when every alert
+  leaves the feed at once is not seen. This is rare, so it stays a known
+  limit; building the sequence from the fetch log (feed `Alerts`, outcome
+  `written`) would close it, at the cost of a second source in the model.
 
 ### `stg_alert_informed_entities` (view on `stg_alerts`)
 
