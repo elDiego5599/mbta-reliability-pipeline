@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_trip_updates
+    description: >-
+      One stop time update in one TripUpdates snapshot. Every silver row is
+      kept; two rows with the same key fail the key test instead of being
+      merged.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [trip__trip_id, trip__start_date, stop_time_update__stop_sequence, header_ts]
+    columns:
+      - name: header_ts
+        data_tests: [not_null]
+      - name: trip__trip_id
+        data_tests: [not_null]
+      - name: trip__schedule_relationship
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [SCHEDULED, ADDED, UNSCHEDULED, CANCELED, REPLACEMENT, DUPLICATED, DELETED, NEW]
+      - name: stop_time_update__schedule_relationship
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [SCHEDULED, SKIPPED, NO_DATA, UNSCHEDULED]
