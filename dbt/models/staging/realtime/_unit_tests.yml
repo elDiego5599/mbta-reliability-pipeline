@@ -283,3 +283,329 @@ unit_tests:
     expect:
       rows:
         - {header_ts: 130, timestamp: 90, report_age_s: 40}
+  - name: ut_alerts_unchanged_collapse
+    description: >-
+      An alert with the same content in three snapshots is one version.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (300, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 300, version_snapshot_count: 3, version_ended_ts: null}
+  - name: ut_alerts_change
+    description: >-
+      A content change starts a new version and ends the previous one.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DETOUR', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: null}
+  - name: ut_alerts_leave_and_return
+    description: >-
+      An alert absent from a snapshot that exists and then back with the same content is two versions; the first ends at the snapshot it left.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'Y', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (300, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', version_first_seen_ts: 300, version_last_seen_ts: 300, version_snapshot_count: 1, version_ended_ts: null}
+        - {alert_id: 'Y', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: 300}
+  - name: ut_alerts_null_content
+    description: >-
+      A null content column does not split a version.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', null, [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', null, [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 200, version_snapshot_count: 2, version_ended_ts: null}
+  - name: ut_alerts_rolling_end
+    description: >-
+      Only the end of an active period moving forward does not split a version; the first and last active periods of the version are both kept.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1060}]),
+            (300, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1120}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 300, version_snapshot_count: 3, version_ended_ts: null, first_active_period: '[{start: 50, end: 1000}]', last_active_period: '[{start: 50, end: 1120}]'}
+  - name: ut_alerts_start_change
+    description: >-
+      A change in an active period start splits a version.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 60, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: null}
+  - name: ut_alerts_period_added
+    description: >-
+      A change in the number of active periods splits a version.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}, {'start': 2000, 'end': 3000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: null}
+  - name: ut_alerts_english_text
+    description: >-
+      header_text is the English translation when there is one, else the first.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'hola', 'language': 'es'}, {'text': 'hello', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (100, 'Y', 'DELAY', 'WARNING', [{'text': 'hola', 'language': 'es'}, {'text': 'salut', 'language': 'fr'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', header_text: 'hello'}
+        - {alert_id: 'Y', header_text: 'hola'}
+  - name: ut_informed_entities_unnest
+    description: >-
+      One row per informed entity with a 1-based index; an empty list gives no rows.
+    model: stg_alert_informed_entities
+    given:
+      - input: ref('stg_alerts')
+        format: sql
+        rows: |
+          select 'X' as alert_id, 100::bigint as version_first_seen_ts,
+            [{'agency_id': '1', 'route_id': 'Red', 'route_type': 1, 'trip': null,
+              'stop_id': null, 'direction_id': null},
+             {'agency_id': '1', 'route_id': 'Red', 'route_type': 1,
+              'trip': {'trip_id': 'T1', 'route_id': 'Red', 'direction_id': 0, 'start_time': null,
+                       'start_date': '20261125', 'schedule_relationship': null, 'modified_trip': null},
+              'stop_id': 'place-sstat', 'direction_id': 1}]::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity
+          union all
+          select 'Y', 100, []::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[]
+    expect:
+      rows:
+        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null}
+        - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1}

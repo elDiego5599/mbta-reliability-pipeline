@@ -51,3 +51,40 @@ models:
           - accepted_values:
               arguments:
                 values: [INCOMING_AT, STOPPED_AT, IN_TRANSIT_TO]
+
+  - name: stg_alerts
+    description: >-
+      One row per alert version: the same alert with the same content in
+      consecutive Alerts snapshots. A content change or an absence from a
+      snapshot starts a new version; active periods are compared by their
+      start times only, so a change in end times alone does not split a
+      version. first_active_period and last_active_period keep the active
+      period of the first and of the last snapshot of the version.
+      version_ended_ts is the first snapshot the version is missing from,
+      null while it is in the latest one. header_text and description_text
+      are the English translation, else the first.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [alert_id, version_first_seen_ts]
+    columns:
+      - name: alert_id
+        data_tests: [not_null]
+      - name: version_first_seen_ts
+        data_tests: [not_null]
+
+  - name: stg_alert_informed_entities
+    description: >-
+      One row per informed entity of an alert version, with its 1-based
+      position in the list.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [alert_id, version_first_seen_ts, entity_index]
+    columns:
+      - name: alert_id
+        data_tests: [not_null]
+      - name: version_first_seen_ts
+        data_tests: [not_null]
+      - name: entity_index
+        data_tests: [not_null]

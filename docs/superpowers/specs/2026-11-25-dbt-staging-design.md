@@ -227,12 +227,15 @@ silver alerts (the poller writes one only when the ETag changes). A version
 is a maximal run of consecutive snapshots in that sequence in which the alert
 (`entity_id`, renamed `alert_id`) is present with identical content (every
 column except `header_ts`, `snapshot_date` and the file name, compared
-exactly). An alert that leaves the feed and comes back with the same content
-starts a new version. Columns:
+exactly), with `active_period` compared by its start times only. An alert
+that leaves the feed and comes back with the same content starts a new
+version. Columns:
 
 - the alert content, with translation lists kept as lists, plus
   `header_text` and `description_text` picked from the English translation
   (or the first one when no language is set);
+- `first_active_period` and `last_active_period`: the `active_period` of the
+  first and of the last snapshot of the run;
 - `version_first_seen_ts` and `version_last_seen_ts` (first and last snapshot
   of the run), `version_snapshot_count`;
 - `version_ended_ts`: the first snapshot after the run (the alert changed or
@@ -240,6 +243,21 @@ starts a new version. Columns:
 
 Times are only as precise as the snapshots: a change is known to have
 happened between `version_last_seen_ts` and `version_ended_ts`.
+
+Rolling end times (decided 2026-11-25): on real data the MBTA moves the end
+of an active period forward every minute on open-ended alerts (the end is
+about now plus 2 hours). Measured on 2026-11-25: 3,434 of 3,477
+`active_period` changes only move an end; 62 of 180 alerts do this; the model
+produced 3,660 versions where about 150 were expected. A version is decided
+by the content with `active_period` replaced by the list of its start times
+(order and length kept), so a change in any start, or in the number of
+periods, still splits a version, while a change in end times alone does not.
+The first and last values stay in `first_active_period` and
+`last_active_period`, so a real end change (for example an end moved to a
+fixed time) is still visible without splitting a version. The comparison
+stays exact, with `is distinct from` on the struct and on the start list.
+On the same data the rule gives 226 versions for 180 alerts, 67 of them
+with a moved end.
 
 Known limits:
 
