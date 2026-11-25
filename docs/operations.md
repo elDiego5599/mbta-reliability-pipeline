@@ -10,6 +10,16 @@ Three launchd user agents run the pipeline:
 
 Logs are at `data/logs/poller.log`, `data/logs/compact.log`, and `data/logs/static.log`. Each compact and static run starts with a `run at <UTC time>` line, so a quiet run still shows the agent is alive.
 
+## Logs
+
+The poller writes one JSON object per line: a `start` event, one `fetch` event per `fetch_log` row (with the same fields; `retry` at WARNING, `failed` and `invalid` at ERROR), and an `error` event with the traceback in `exc` for an unexpected exception. httpx request lines are not logged. Compact and static keep their text lines.
+
+Each log rotates itself once it passes 10 MB: `<job>.log` becomes `<job>.log.1`, older files move up to `.5`, and the oldest is dropped, so each job keeps about 60 MB. The poller checks after every line; compact and static check at the start of each run. If a rotation fails, the job writes one `log_rotation_failed` line and keeps writing to its current file until it restarts.
+
+```bash
+tail -f data/logs/poller.log | jq -c 'select(.level != "INFO")'
+```
+
 ## Operating rule
 
 The checkout where the agents are installed stays on `main`. Do branch work in git worktrees:
@@ -43,8 +53,10 @@ Check the latest file in `data/fetch_log`.
 
 ```bash
 git pull && uv sync
-launchctl kickstart -k gui/$(id -u)/io.github.eldiego5599.mbta.poller
+launchctl kill SIGTERM gui/$(id -u)/io.github.eldiego5599.mbta.poller
 ```
+
+`KeepAlive` restarts the poller with the new code after the 30 second throttle.
 
 The batch agents pick up the new code on their next run.
 

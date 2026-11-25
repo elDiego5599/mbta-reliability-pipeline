@@ -272,7 +272,7 @@ assets:
 | Agreement with MBTA | marts vs LAMP | Rapid transit daily headway p50 differs by more than 10 % on a station |
 
 Observability stays small: the poller logs JSON lines to stdout (captured by
-launchd), Dagster shows run history and check results, and a
+launchd; each log file rotates itself at 10 MB and keeps five old files), Dagster shows run history and check results, and a
 `make status` target prints the last fetch per feed, today's coverage and
 disk use.
 

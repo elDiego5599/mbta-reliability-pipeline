@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+from mbta_reliability.logs import rotate_stdout
 from mbta_reliability.silver import (
     BRONZE_NAME,
     FEEDS,
@@ -96,6 +97,7 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = Non
     args = parser.parse_args(argv)
     feeds = [args.feed] if args.feed else list(FEEDS)
 
+    rotate_stdout()
     current = now() if now is not None else datetime.now(UTC)
     print(f"run at {current:%Y-%m-%dT%H:%M:%SZ}")
 

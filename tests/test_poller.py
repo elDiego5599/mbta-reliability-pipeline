@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 
 import httpx
@@ -135,3 +136,29 @@ def test_poll_once_keeps_etag_and_logs_unchanged(tmp_path, fake_sleep):
     assert state.etags["Alerts"] == '"e1"'
     [row] = read_log(tmp_path)
     assert row["outcome"] == "unchanged"
+
+
+def fetch_events(caplog):
+    return [r for r in caplog.records if r.name == "poller" and r.getMessage() == "fetch"]
+
+
+def test_poll_once_logs_each_fetch_log_row_as_an_event(tmp_path, feed_bytes, fake_sleep, caplog):
+    caplog.set_level(logging.INFO, logger="poller")
+    client = client_returning(httpx.Response(200, content=feed_bytes(TS)))
+
+    poll(tmp_path, client, fake_sleep, now=TS + 10)
+
+    [event] = fetch_events(caplog)
+    assert event.levelno == logging.INFO
+    assert event.fields == read_log(tmp_path)[0]
+
+
+def test_poll_once_logs_retries_as_warning_and_failure_as_error(tmp_path, fake_sleep, caplog):
+    caplog.set_level(logging.INFO, logger="poller")
+    client = client_returning(*[httpx.Response(503) for _ in range(4)])
+
+    poll(tmp_path, client, fake_sleep, now=TS)
+
+    events = fetch_events(caplog)
+    assert [e.levelno for e in events] == [logging.WARNING] * 3 + [logging.ERROR]
+    assert [e.fields for e in events] == read_log(tmp_path)

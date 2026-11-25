@@ -4,6 +4,7 @@ from importlib import metadata
 import httpx
 import pytest
 
+from mbta_reliability import static_cli
 from mbta_reliability.static_cli import main
 
 NOW = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
@@ -97,4 +98,15 @@ def test_each_run_starts_with_utc_run_time(tmp_path, capsys):
     client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(304)))
     main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW)
     assert capsys.readouterr().out.splitlines()[0] == "run at 2026-11-24T12:00:00Z"
+    client.close()
+
+
+def test_each_run_rotates_its_log_before_printing(tmp_path, capsys, monkeypatch):
+    calls = []
+    monkeypatch.setattr(static_cli, "rotate_stdout", lambda: calls.append(capsys.readouterr().out))
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(304)))
+
+    main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW)
+
+    assert calls == [""]
     client.close()
