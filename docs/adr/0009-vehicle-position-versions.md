@@ -39,6 +39,13 @@ Other facts from the same two hours:
   across the hour boundary, which silver does not remove) and 14 with
   different content.
 - No row has a null `vehicle__id` or `timestamp`.
+- The feed sometimes sends an old `timestamp` long after it was current.
+  `header_ts - timestamp` has a median of 7 s and a p95 of 29 s, but reaches
+  13,543 s; 29 rows are more than 10 minutes old and 5 rows (one vehicle)
+  more than an hour. Ordered by (`timestamp`, `header_ts`) with the
+  observation time rule below, the observation time goes backward in 29 of
+  114,190 consecutive pairs per vehicle. The worst is `G-10009`, from
+  1795621444 to 1795608859, 12,585 s back.
 
 ## Decision
 
@@ -60,6 +67,12 @@ Other facts from the same two hours:
   is at most one poller interval: about 30 s, and 60 s when a snapshot is
   missing. This bound is part of `crossing_uncertainty_s` (spec 6.2) and is
   stated in the dashboard method notes.
+- **Observation time never goes backward.** Within each vehicle and trip, in
+  canonical order, the observation time is the running maximum of the times
+  above. A row whose own time is below that maximum is marked
+  `observation_time_clamped`. On the two measured hours this marks 56 rows.
+  A data quality test counts the marked rows per hour so they stay visible;
+  it warns and does not fail the build.
 
 ## Alternatives rejected
 
@@ -80,5 +93,14 @@ Other facts from the same two hours:
   holds is lost in dbt.
 - Staging has about 1.6 % more rows than a one-report-per-`timestamp` model.
 - Models that order a vehicle's reports must sort by two columns, and
-  `int_stop_crossings` carries the observation time rule above. Its unit
-  tests cover a stop advance without a new `timestamp`.
+  `int_stop_crossings` carries the observation time rules above. Its unit
+  tests cover a stop advance without a new `timestamp`, and a report with an
+  old `timestamp` that arrives late (its observation time is clamped and the
+  row is marked).
+
+## Open question
+
+Snapshot staleness (spec 4.3) is flagged per feed, not per vehicle. Some
+vehicles keep the same `timestamp` for hours while they stay in the feed.
+Whether staging or the crossing models should drop, cap or only flag such
+reports, and at what age, is decided during phase 2.

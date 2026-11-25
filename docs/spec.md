@@ -213,9 +213,12 @@ For each vehicle on a trip, consecutive reports are ordered by
 (`timestamp`, `header_ts`). Each report has an observation time: `timestamp`
 for the first version of a report, and `header_ts` for a later version that
 changes `stop_id`, `current_stop_sequence`, `current_status` or
-`trip__trip_id` (ADR 0009). The times below are observation times. A
-crossing of stop *s* is recorded when the report's `current_stop_sequence`
-moves past *s*'s sequence:
+`trip__trip_id` (ADR 0009). Within a vehicle and trip the observation time
+never goes backward: it is the running maximum in that order, and a row
+below the maximum is marked `observation_time_clamped` (the feed sometimes
+sends an old `timestamp` hours late). The times below are observation
+times. A crossing of stop *s* is recorded when the report's
+`current_stop_sequence` moves past *s*'s sequence:
 
 1. If there is a `STOPPED_AT` report at *s*, the crossing time is the last such
    report's observation time (the departure).
