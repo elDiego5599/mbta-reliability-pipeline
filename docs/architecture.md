@@ -73,6 +73,7 @@ flowchart LR
 | `poller` | Fetches the three realtime feeds on their own cadence, retries with backoff, writes each snapshot atomically, logs every attempt. | Long-lived process kept alive by launchd. | `bronze/`, `fetch_log/` |
 | `compact` | Parses one hour of bronze snapshots into one Parquet file per feed, dropping exact duplicates. Overwrites that hour. | launchd agent hourly at :10 (`--pending`) until Dagster takes over at phase 3. | `silver/` |
 | `static` | Downloads `MBTA_GTFS.zip` when its ETag changes and stores each `feed_version` as Parquet. | launchd agent daily at 04:00 local time until Dagster takes over. | `static/` |
+| `prune` | Deletes bronze snapshots older than 14 days once their silver hour lists them, recompacting first when it does not. | launchd agent daily at 04:30 local time, dry run until the owner switches on `--apply`. | `bronze/` (deletes only), `silver/` (recompaction) |
 | dbt project | Staging, intermediate and mart models in DuckDB, plus tests. | Dagster, after each daily partition closes. | `warehouse.duckdb` |
 | `export` | Loads the mart tables into BigQuery, replacing them. | Dagster, daily after dbt. | BigQuery dataset |
 | Dashboard | Looker Studio report on the BigQuery marts. | Google, free. | Nothing |
@@ -121,3 +122,4 @@ in the code depends on macOS; launchd is replaced by a systemd unit.
 | [0005](adr/0005-headway-at-timepoints.md) | Measure headways where vehicles cross a fixed mid-route timepoint; nearest-rank percentiles. |
 | [0006](adr/0006-looker-studio-dashboard.md) | Looker Studio on BigQuery marts for the public dashboard. |
 | [0007](adr/0007-runtime-mac-then-vm.md) | Run on the Mac with launchd first, a small VM later. |
+| [0008](adr/0008-bronze-retention.md) | Delete bronze after 14 days only when silver lists every snapshot of the hour. |

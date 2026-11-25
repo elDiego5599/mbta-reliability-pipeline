@@ -175,8 +175,12 @@ updated in the same change.
   the final order depends only on the data.
 - Parquet settings are fixed constants: zstd compression, a fixed level, one
   row group per file unless it exceeds a fixed row limit, dictionary encoding
-  on, statistics on, no key-value metadata beyond what pyarrow writes for the
-  schema.
+  on, statistics on, and no key-value metadata beyond what pyarrow writes for
+  the schema, plus one key: `mbta.bronze_header_ts`, the `header_ts` of every
+  bronze file read, ascending, as compact JSON (`[1795532400,1795532430]`).
+  The list depends only on the input files, so output stays byte-identical.
+  Bronze retention uses it as proof that an hour is compacted (amended
+  2026-11-25, see [ADR 0008](../../adr/0008-bronze-retention.md)).
 
 ### Writing
 
