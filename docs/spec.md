@@ -186,6 +186,7 @@ service day.
 | staging | `stg_trip_updates` | one stop time update per snapshot |
 | staging | `stg_alerts`, `stg_alert_informed_entities` | one alert version; one affected entity |
 | staging | `stg_static__trips`, `__stop_times`, `__stops`, `__routes`, `__route_patterns`, `__shapes`, `__calendar`, `__calendar_dates` | as in GTFS, plus `feed_version` |
+| staging | `stg_static__versions` | one static feed version |
 | staging | `stg_fetch_log` | one fetch attempt |
 | intermediate | `int_static_active_version` | one service date, the `feed_version` in effect |
 | intermediate | `int_scheduled_stop_times` | one scheduled stop time on a service date |
@@ -216,9 +217,12 @@ changes `stop_id`, `current_stop_sequence`, `current_status` or
 `trip__trip_id` (ADR 0009). Within a vehicle and trip the observation time
 never goes backward: it is the running maximum in that order, and a row
 below the maximum is marked `observation_time_clamped` (the feed sometimes
-sends an old `timestamp` hours late). The times below are observation
-times. A crossing of stop *s* is recorded when the report's
-`current_stop_sequence` moves past *s*'s sequence:
+sends an old `timestamp` hours late). The observation time and
+`observation_time_clamped` are computed in `stg_vehicle_positions`
+(columns `observation_ts` and `observation_time_clamped`), and crossings
+use them. The times below are observation times. A crossing of stop *s* is
+recorded when the report's `current_stop_sequence` moves past *s*'s
+sequence:
 
 1. If there is a `STOPPED_AT` report at *s*, the crossing time is the last such
    report's observation time (the departure).
