@@ -16,6 +16,7 @@ mbta-poller = "mbta_reliability.poller:main"
 mbta-compact = "mbta_reliability.compact:main"
 mbta-static = "mbta_reliability.static_cli:main"
 mbta-prune = "mbta_reliability.prune:main"
+mbta-status = "mbta_reliability.status:main"
 
 [dependency-groups]
 dev = [

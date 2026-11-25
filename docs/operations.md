@@ -48,7 +48,41 @@ launchctl list | grep mbta
 tail -f data/logs/poller.log
 ```
 
-Check the latest file in `data/fetch_log`.
+For a one-screen summary, run from the repository root:
+
+```bash
+make status
+```
+
+It runs `uv run mbta-status --data-dir data`; set `DATA_DIR=/path/to/data` to point it elsewhere. It only reads the data directory and prints three sections:
+
+- **Last fetch** per feed from the two most recent days of `data/fetch_log`: time (UTC), age and outcome (`written`, `duplicate`, `unchanged`, `failed`, `invalid` or `retry`), with `stale` appended when the snapshot header was older than 120 s.
+- **Coverage** for today in UTC: bronze snapshots per feed and hour against the expected count (120 for vehicle positions, 12 for trip updates). Alerts are ETag gated, so they show a count only. Closed hours say whether the silver file exists; the current hour is marked `open`. Leading hours with no snapshots collapse into one `none` line.
+- **Disk** used by `bronze`, `silver`, `static` and `logs`, counted as `du` does, and the free space on the data disk.
+
+Example:
+
+```
+Last fetch (now 2026-11-25T16:37:14Z)
+VehiclePositions  2026-11-25T16:37:00Z  13s ago       written
+TripUpdates       2026-11-25T16:35:00Z  2m 13s ago    written
+Alerts            2026-11-25T16:37:00Z  13s ago       written
+
+Coverage 2026-11-25 (UTC), bronze snapshots per hour against expected
+hour  VehiclePositions      TripUpdates           Alerts (ETag gated)
+00-14 none
+15    109/120 91% silver    12/12 100% silver     56 silver
+16    76/120 open           8/12 open             34 open
+
+Disk (data)
+bronze    14.9 MiB
+silver     2.1 MiB
+static    57.7 MiB
+logs      56.0 KiB
+free      60.0 GiB
+```
+
+The raw rows are in the latest file under `data/fetch_log`.
 
 ## Update the code
 
