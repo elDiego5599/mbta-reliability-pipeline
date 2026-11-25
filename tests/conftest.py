@@ -1,5 +1,39 @@
+import csv
+import io
+import zipfile
+
 import pytest
 from google.transit import gtfs_realtime_pb2
+
+
+def make_gtfs_zip(
+    members: dict[str, str | bytes] | None = None,
+    feed_version: str = "Test, version A",
+) -> bytes:
+    """Build a deterministic synthetic GTFS zip."""
+    if members is None:
+        feed_info = io.StringIO(newline="")
+        writer = csv.writer(feed_info, lineterminator="\n")
+        writer.writerow(["feed_version", "feed_start_date", "feed_end_date"])
+        writer.writerow([feed_version, "20260101", "20260131"])
+        members = {
+            "agency.txt": "agency_id,agency_name\n1,Test Agency\n",
+            "feed_info.txt": feed_info.getvalue(),
+            "stops.txt": "stop_id,stop_name\n1,Test Stop\n",
+        }
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, body in members.items():
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, body.encode("utf-8") if isinstance(body, str) else body)
+    return output.getvalue()
+
+
+@pytest.fixture
+def gtfs_zip():
+    return make_gtfs_zip
 
 
 def make_feed(header_ts: int, n_entities: int = 1) -> bytes:
