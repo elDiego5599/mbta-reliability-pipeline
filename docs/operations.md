@@ -15,7 +15,7 @@ Logs are at `data/logs/poller.log`, `data/logs/compact.log`, `data/logs/static.l
 
 The poller writes one JSON object per line: a `start` event, one `fetch` event per `fetch_log` row (with the same fields; `retry` at WARNING, `failed` and `invalid` at ERROR), and an `error` event with the traceback in `exc` for an unexpected exception. httpx request lines are not logged. Compact and static keep their text lines.
 
-Each log rotates itself once it passes 10 MB: `<job>.log` becomes `<job>.log.1`, older files move up to `.5`, and the oldest is dropped, so each job keeps about 60 MB. The poller checks after every line; compact and static check at the start of each run. If a rotation fails, the job writes one `log_rotation_failed` line and keeps writing to its current file until it restarts.
+Each log rotates itself once it passes 10 MB: `<job>.log` becomes `<job>.log.1`, older files move up to `.5`, and the oldest is dropped, so each job keeps about 60 MB. The poller checks after every line; compact, static and prune check at the start of each run. If a rotation fails, the job writes one `log_rotation_failed` line and keeps writing to its current file until it restarts.
 
 ```bash
 tail -f data/logs/poller.log | jq -c 'select(.level != "INFO")'

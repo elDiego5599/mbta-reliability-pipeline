@@ -9,6 +9,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from mbta_reliability.logs import rotate_stdout
 from mbta_reliability.silver import (
     BRONZE_NAME,
     FEEDS,
@@ -138,6 +139,7 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = Non
     parser.add_argument("--apply", action="store_true", help="delete; without it, only report")
     args = parser.parse_args(argv)
 
+    rotate_stdout()
     current = now() if now is not None else datetime.now(UTC)
     print(f"run at {current:%Y-%m-%dT%H:%M:%SZ}")
     if not args.apply:

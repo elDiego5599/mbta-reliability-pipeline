@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pyarrow.parquet as pq
 import pytest
 
-from mbta_reliability import bronze
+from mbta_reliability import bronze, prune
 from mbta_reliability.prune import main
 from mbta_reliability.silver import (
     HEADER_TS_KEY,
@@ -231,3 +231,10 @@ def test_other_feeds_are_pruned(tmp_path, feed, trip_updates_payload, alerts_pay
     compact_hour(tmp_path, feed, DATE, 15)
     assert _run(tmp_path, "--apply") == 0
     assert not (tmp_path / "bronze" / feed / f"date={DATE}").exists()
+
+
+def test_each_run_rotates_its_log_before_printing(tmp_path, capsys, monkeypatch):
+    calls = []
+    monkeypatch.setattr(prune, "rotate_stdout", lambda: calls.append(capsys.readouterr().out))
+    _run(tmp_path)
+    assert calls == [""]
