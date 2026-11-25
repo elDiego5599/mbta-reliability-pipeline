@@ -31,7 +31,9 @@ uv run pytest
 uv run mbta-poller --data-dir data
 ```
 
-To run everything unattended, see [Operations](docs/operations.md).
+`make status` prints the last fetch per feed, today's bronze coverage per
+hour against the expected count, and disk use. To run everything unattended,
+see [Operations](docs/operations.md).
 
 ## Stack
 
