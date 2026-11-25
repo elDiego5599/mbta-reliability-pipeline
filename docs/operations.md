@@ -8,7 +8,7 @@ Three launchd user agents run the pipeline:
 - `io.github.eldiego5599.mbta.compact`: runs at minute 10 every hour with `--pending`, and runs once when loaded.
 - `io.github.eldiego5599.mbta.static`: runs daily at 04:00 local time, and runs once when loaded.
 
-Logs are at `data/logs/poller.log`, `data/logs/compact.log`, and `data/logs/static.log`.
+Logs are at `data/logs/poller.log`, `data/logs/compact.log`, and `data/logs/static.log`. Each compact and static run starts with a `run at <UTC time>` line, so a quiet run still shows the agent is alive.
 
 ## Operating rule
 
@@ -57,7 +57,7 @@ launchctl kickstart gui/$(id -u)/io.github.eldiego5599.mbta.static
 
 ## Compaction details
 
-`--pending` compacts every closed hour that has bronze and no silver, oldest first. A failed hour is retried every hour and shows in `compact.log`.
+`--pending` compacts every closed hour that has bronze and no silver, oldest first. Hours whose directory holds no snapshot files, such as only `.tmp-` leftovers, are skipped. A failed hour is retried every hour and shows in `compact.log`.
 
 It never recompacts an hour that already has silver. A late snapshot only enters silver after a manual run for that hour, given in UTC:
 
