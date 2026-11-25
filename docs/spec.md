@@ -141,7 +141,14 @@ after a full week of real counts replaces them in this table.
   rules, including null keys and conflicting rows, are in the
   [compaction design](superpowers/specs/2026-11-24-silver-compaction-design.md).
 - **Hour level.** Compaction overwrites `hour=HH.parquet` whole. Running it twice
-  for the same hour gives a byte-identical file.
+  for the same hour gives a byte-identical file. Each silver file records the
+  `header_ts` of every bronze file it read in its Parquet key-value metadata
+  (`mbta.bronze_header_ts`).
+- **Retention.** `mbta-prune` deletes a bronze snapshot only when its hour
+  ended more than 14 days ago (UTC partition) and the silver file of that hour
+  lists its `header_ts`. A snapshot silver does not list is recompacted first;
+  an hour without silver is kept. See
+  [ADR 0008](adr/0008-bronze-retention.md).
 
 ### 4.3 Gaps and retries
 

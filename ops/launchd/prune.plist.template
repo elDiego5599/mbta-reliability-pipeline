@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- This is a launchd template rendered by install.sh and must not be edited once installed. -->
+<!-- Dry run until the owner reviews prune.log; the apply flag turns deletion on, see docs/operations.md. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.eldiego5599.mbta.prune</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@REPO@/.venv/bin/mbta-prune</string>
+    <string>--data-dir</string>
+    <string>@REPO@/data</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>4</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@REPO@/data/logs/prune.log</string>
+  <key>StandardErrorPath</key>
+  <string>@REPO@/data/logs/prune.log</string>
+</dict>
+</plist>

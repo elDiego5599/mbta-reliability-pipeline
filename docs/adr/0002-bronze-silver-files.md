@@ -48,4 +48,5 @@ orchestrator, builds silver and overwrites the hour whole.
 - An hour is only queryable after compaction, so freshness is about one hour.
   The metrics need one day.
 - Bronze retention must be enforced by a scheduled cleanup, with a check that
-  the hour was compacted before its bronze is deleted.
+  the hour was compacted before its bronze is deleted. How that check works is
+  in [ADR 0008](0008-bronze-retention.md).

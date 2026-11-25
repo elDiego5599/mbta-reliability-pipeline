@@ -4,7 +4,7 @@
 #        install.sh --render-only DIR  only render the plists into DIR (used by the tests)
 set -euo pipefail
 
-AGENTS="poller compact static"
+AGENTS="poller compact static prune"
 PREFIX="io.github.eldiego5599.mbta"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
