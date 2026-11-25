@@ -30,3 +30,78 @@ class FakeSleep:
 @pytest.fixture
 def fake_sleep():
     return FakeSleep()
+
+
+def _feed(header_ts: int = 100) -> gtfs_realtime_pb2.FeedMessage:
+    msg = gtfs_realtime_pb2.FeedMessage()
+    msg.header.gtfs_realtime_version = "2.0"
+    msg.header.timestamp = header_ts
+    return msg
+
+
+def make_trip_updates(header_ts: int = 100) -> bytes:
+    """Two trip updates: t1 with three stop time updates, t2 with none."""
+    msg = _feed(header_ts)
+    first = msg.entity.add()
+    first.id = "e1"
+    first.trip_update.trip.trip_id = "t1"
+    first.trip_update.trip.start_date = "20260101"
+    for seq in (1, 2, 3):
+        stu = first.trip_update.stop_time_update.add()
+        stu.stop_sequence = seq
+        stu.stop_id = f"s{seq}"
+        stu.arrival.delay = 30 * seq
+    second = msg.entity.add()
+    second.id = "e2"
+    second.trip_update.trip.trip_id = "t2"
+    second.trip_update.trip.start_date = "20260101"
+    return msg.SerializeToString()
+
+
+def make_alerts(header_ts: int = 100) -> bytes:
+    """One alert with two informed entities and one active period."""
+    msg = _feed(header_ts)
+    entity = msg.entity.add()
+    entity.id = "a1"
+    alert = entity.alert
+    period = alert.active_period.add()
+    period.start = header_ts - 10
+    period.end = header_ts + 10
+    for route in ("Red", "Blue"):
+        informed = alert.informed_entity.add()
+        informed.route_id = route
+    alert.header_text.translation.add(text="Delay", language="en")
+    return msg.SerializeToString()
+
+
+def make_vehicles_with_deleted(header_ts: int = 100) -> bytes:
+    """One live vehicle (with a carriage detail) and one deleted entity."""
+    msg = _feed(header_ts)
+    live = msg.entity.add()
+    live.id = "v1"
+    live.vehicle.vehicle.id = "v1"
+    live.vehicle.timestamp = header_ts
+    live.vehicle.position.latitude = 42.0
+    live.vehicle.position.longitude = -71.0
+    carriage = live.vehicle.multi_carriage_details.add()
+    carriage.id = "c1"
+    carriage.label = "1800"
+    gone = msg.entity.add()
+    gone.id = "v2"
+    gone.is_deleted = True
+    return msg.SerializeToString()
+
+
+@pytest.fixture
+def trip_updates_payload() -> bytes:
+    return make_trip_updates()
+
+
+@pytest.fixture
+def alerts_payload() -> bytes:
+    return make_alerts()
+
+
+@pytest.fixture
+def vehicles_payload() -> bytes:
+    return make_vehicles_with_deleted()
