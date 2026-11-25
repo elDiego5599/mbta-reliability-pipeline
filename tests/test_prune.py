@@ -5,7 +5,13 @@ import pytest
 
 from mbta_reliability import bronze
 from mbta_reliability.prune import main
-from mbta_reliability.silver import compact_hour, feed_schema, silver_header_ts, silver_path
+from mbta_reliability.silver import (
+    HEADER_TS_KEY,
+    compact_hour,
+    feed_schema,
+    silver_header_ts,
+    silver_path,
+)
 
 HOUR = 1795532400  # 2026-11-24 15:00:00 UTC
 START = datetime(2026, 11, 24, 15, tzinfo=UTC)
@@ -108,6 +114,18 @@ def test_silver_without_header_ts_list_is_recompacted(tmp_path, feed_bytes):
     assert _run(tmp_path, "--apply") == 0
     assert silver_header_ts(silver) == [HOUR, HOUR + 30]
     assert not _hour_dir(tmp_path).exists()
+
+
+def test_silver_with_corrupt_header_ts_list_is_recompacted(tmp_path, feed_bytes, capsys):
+    _write(tmp_path, feed_bytes, [0, 30])
+    silver = silver_path(tmp_path, VP, DATE, 15)
+    silver.parent.mkdir(parents=True)
+    table = feed_schema(VP).empty_table().replace_schema_metadata({HEADER_TS_KEY: b"[1,"})
+    pq.write_table(table, silver)
+    assert _run(tmp_path, "--apply") == 0
+    assert silver_header_ts(silver) == [HOUR, HOUR + 30]
+    assert not _hour_dir(tmp_path).exists()
+    assert f"2026-11-24T15 {VP} recompacted: 2 files" in _lines(capsys)
 
 
 def test_failed_recompaction_keeps_the_hour(tmp_path, feed_bytes, capsys):

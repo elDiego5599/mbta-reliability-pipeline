@@ -7,6 +7,7 @@ from google.transit import gtfs_realtime_pb2
 
 from mbta_reliability import bronze
 from mbta_reliability.silver import (
+    HEADER_TS_KEY,
     CompactionError,
     compact_hour,
     feed_schema,
@@ -201,3 +202,14 @@ def test_silver_header_ts_is_none_for_missing_or_unreadable_file(tmp_path):
     bad = tmp_path / "bad.parquet"
     bad.write_bytes(b"not parquet")
     assert silver_header_ts(bad) is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [b"not json", b"\xff", b"null", b'{"a":1}', b'[1,"2"]', b"[1.5]", b"[true]", b"[[1]]"],
+)
+def test_silver_header_ts_is_none_for_corrupt_metadata(tmp_path, value):
+    path = tmp_path / "corrupt.parquet"
+    table = feed_schema(VP).empty_table().replace_schema_metadata({HEADER_TS_KEY: value})
+    pq.write_table(table, path)
+    assert silver_header_ts(path) is None

@@ -295,7 +295,8 @@ def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> tuple[Path,
 def silver_header_ts(path: Path) -> list[int] | None:
     """Header timestamps of the bronze files a silver file was built from, ascending.
 
-    None when the file is missing, unreadable, or was written before this list was recorded.
+    None when the file is missing or unreadable, was written before this list was recorded,
+    or holds a value that is not a JSON list of integers.
     """
     try:
         metadata = pq.read_schema(path).metadata or {}
@@ -303,4 +304,10 @@ def silver_header_ts(path: Path) -> list[int] | None:
         return None
     if HEADER_TS_KEY not in metadata:
         return None
-    return json.loads(metadata[HEADER_TS_KEY])
+    try:
+        values = json.loads(metadata[HEADER_TS_KEY])
+    except ValueError:
+        return None
+    if not isinstance(values, list) or any(type(v) is not int for v in values):
+        return None
+    return values
