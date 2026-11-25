@@ -1,10 +1,15 @@
 """Convert static GTFS zip members into all-string Arrow tables."""
 
 import csv
+import hashlib
 import io
+import os
 import re
+import shutil
+import tempfile
 import zipfile
 import zlib
+from pathlib import Path
 from typing import BinaryIO, NamedTuple
 
 import pyarrow as pa
@@ -18,6 +23,23 @@ from mbta_reliability.silver import (
 )
 
 MEMBER_NAME = re.compile(r"^[a-z0-9_]+\.txt$")
+
+ZIP_NAME = "MBTA_GTFS.zip"
+
+VERSIONS_SCHEMA = pa.schema(
+    [
+        pa.field("sha12", pa.string()),
+        pa.field("sha256", pa.string()),
+        pa.field("feed_version", pa.string()),
+        pa.field("feed_start_date", pa.string()),
+        pa.field("feed_end_date", pa.string()),
+        pa.field("zip_bytes", pa.int64()),
+        pa.field("etag", pa.string()),
+        pa.field("last_modified", pa.string()),
+        pa.field("first_seen_at", pa.timestamp("us", tz="UTC")),
+        pa.field("last_checked_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
 
 
 class StaticError(Exception):
@@ -130,3 +152,102 @@ def write_parquet(table: pa.Table, file: BinaryIO) -> None:
         use_dictionary=True,
         write_statistics=True,
     )
+
+
+def static_dir(data_dir: Path) -> Path:
+    return data_dir / "static"
+
+
+def version_dir(data_dir: Path, sha12: str) -> Path:
+    return static_dir(data_dir) / f"feed_version={sha12}"
+
+
+def sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def publish_version(data_dir: Path, zip_bytes: bytes, tables: dict[str, pa.Table]) -> Path:
+    """Publish a raw static zip and its tables in a new version directory."""
+    static = static_dir(data_dir)
+    static.mkdir(parents=True, exist_ok=True)
+    sha12 = sha256_hex(zip_bytes)[:12]
+    target = version_dir(data_dir, sha12)
+    if target.exists():
+        raise StaticError(f"static version directory already exists: {target}")
+
+    temp = Path(tempfile.mkdtemp(dir=static, prefix=".tmp-"))
+    try:
+        with (temp / ZIP_NAME).open("wb") as file:
+            file.write(zip_bytes)
+            file.flush()
+            os.fsync(file.fileno())
+
+        for stem, table in tables.items():
+            with (temp / f"{stem}.parquet").open("wb") as file:
+                write_parquet(table, file)
+                file.flush()
+                os.fsync(file.fileno())
+
+        _fsync_directory(temp)
+        if target.exists():
+            raise StaticError(f"static version directory already exists: {target}")
+        os.replace(temp, target)
+        _fsync_directory(static)
+    except BaseException:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise
+    return target
+
+
+def remove_temp_dirs(data_dir: Path) -> None:
+    static = static_dir(data_dir)
+    if not static.is_dir():
+        return
+    for entry in static.iterdir():
+        if entry.name.startswith(".tmp-") and entry.is_dir():
+            shutil.rmtree(entry)
+
+
+def read_versions(data_dir: Path) -> list[dict]:
+    path = static_dir(data_dir) / "versions.parquet"
+    if not path.is_file():
+        return []
+    table = pq.read_table(path)
+    return table.to_pylist()
+
+
+def write_versions(data_dir: Path, rows: list[dict]) -> Path:
+    static = static_dir(data_dir)
+    static.mkdir(parents=True, exist_ok=True)
+    path = static / "versions.parquet"
+    ordered = sorted(rows, key=lambda row: (row["first_seen_at"], row["sha12"]))
+    table = pa.Table.from_pylist(ordered, schema=VERSIONS_SCHEMA)
+
+    fd, tmp_name = tempfile.mkstemp(dir=static, prefix=".tmp-")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as file:
+            write_parquet(table, file)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(tmp, path)
+        _fsync_directory(static)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def current_etag(rows: list[dict]) -> str | None:
+    if not rows:
+        return None
+    newest = max(rows, key=lambda row: (row["last_checked_at"], row["sha12"]))
+    return newest["etag"]
