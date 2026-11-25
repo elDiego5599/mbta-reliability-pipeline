@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from mbta_reliability.silver import FEEDS, CompactionError, compact_hour, silver_path
+from mbta_reliability.silver import (
+    BRONZE_NAME,
+    FEEDS,
+    CompactionError,
+    compact_hour,
+    silver_path,
+)
 
 CLOSE_GRACE = timedelta(minutes=5)
 
@@ -31,7 +37,7 @@ _HOUR_DIR = re.compile(r"hour=(\d{2})")
 
 
 def pending_hours(data_dir: Path, feed: str, now: datetime) -> list[datetime]:
-    """Closed UTC hours of a feed that have bronze and no silver yet, oldest first."""
+    """Closed UTC hours of a feed that have bronze snapshots and no silver yet, oldest first."""
     feed_dir = Path(data_dir) / "bronze" / feed
     if not feed_dir.is_dir():
         return []
@@ -50,8 +56,12 @@ def pending_hours(data_dir: Path, feed: str, now: datetime) -> list[datetime]:
                 ).replace(tzinfo=UTC)
             except ValueError:
                 continue
-            closed = now >= start + timedelta(hours=1) + CLOSE_GRACE
-            if closed and not silver_path(data_dir, feed, date_match[1], start.hour).exists():
+            if now < start + timedelta(hours=1) + CLOSE_GRACE:
+                continue
+            if silver_path(data_dir, feed, date_match[1], start.hour).exists():
+                continue
+            # An hour with no snapshot files compacts to nothing and would stay pending forever.
+            if any(BRONZE_NAME.match(entry.name) for entry in hour_dir.iterdir()):
                 pending.append(start)
     return sorted(pending)
 
@@ -86,13 +96,15 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] | None = Non
     args = parser.parse_args(argv)
     feeds = [args.feed] if args.feed else list(FEEDS)
 
+    current = now() if now is not None else datetime.now(UTC)
+    print(f"run at {current:%Y-%m-%dT%H:%M:%SZ}")
+
     if not (args.data_dir / "bronze").is_dir():
         if args.pending:
             print(f"no bronze directory under {args.data_dir}; nothing pending")
             return 0
         parser.error(f"no bronze directory under {args.data_dir}")
 
-    current = now() if now is not None else datetime.now(UTC)
     ok = True
     if args.pending:
         jobs = [

@@ -40,7 +40,7 @@ def test_compacts_all_feeds_without_feed_flag(
     assert main(_args(tmp_path), now=now) == 0
     for feed in ("VehiclePositions", "TripUpdates", "Alerts"):
         assert silver_path(tmp_path, feed, "2026-11-24", 15).exists()
-    lines = capsys.readouterr().out.splitlines()
+    lines = capsys.readouterr().out.splitlines()[1:]
     assert [line.split()[0] for line in lines] == ["VehiclePositions", "TripUpdates", "Alerts"]
     path = silver_path(tmp_path, "Alerts", "2026-11-24", 15)
     assert f"written {pq.read_metadata(path).num_rows} rows from 1 files" in lines[2]
@@ -58,7 +58,7 @@ def test_feed_flag_limits_to_one_feed(
 def test_empty_hour_reports_empty(tmp_path, capsys):
     (tmp_path / "bronze").mkdir()
     assert main(_args(tmp_path), now=now) == 0
-    lines = capsys.readouterr().out.splitlines()
+    lines = capsys.readouterr().out.splitlines()[1:]
     assert len(lines) == 3
     assert all("empty" in line for line in lines)
 
@@ -148,7 +148,7 @@ def test_pending_compacts_closed_hours_oldest_first(tmp_path, capsys, vehicles_p
     assert main(_pending(tmp_path), now=now) == 0
     assert silver_path(tmp_path, "VehiclePositions", "2026-11-24", 14).exists()
     assert silver_path(tmp_path, "VehiclePositions", "2026-11-24", 15).exists()
-    lines = capsys.readouterr().out.splitlines()
+    lines = capsys.readouterr().out.splitlines()[1:]
     assert lines[0].startswith("2026-11-24T14 VehiclePositions written")
     assert lines[1].startswith("2026-11-24T15 VehiclePositions written")
 
@@ -234,3 +234,21 @@ def test_hour_or_pending_required(tmp_path):
     with pytest.raises(SystemExit) as exc:
         main(["--data-dir", str(tmp_path)], now=now)
     assert exc.value.code == 2
+
+
+def test_each_run_starts_with_utc_run_time(tmp_path, capsys):
+    assert main(_pending(tmp_path), now=now) == 0
+    assert capsys.readouterr().out.splitlines()[0] == "run at 2026-11-24T16:10:00Z"
+
+
+def test_pending_skips_hour_without_snapshot_files(tmp_path, capsys, monkeypatch):
+    hour_dir = tmp_path / "bronze" / "VehiclePositions" / "date=2026-11-24" / "hour=15"
+    hour_dir.mkdir(parents=True)
+    (hour_dir / ".tmp-leftover").write_bytes(b"partial")
+
+    def should_not_run(*args, **kwargs):
+        raise AssertionError("compact_hour should not run")
+
+    monkeypatch.setattr(compact, "compact_hour", should_not_run)
+    assert main(_pending(tmp_path), now=now) == 0
+    assert "nothing pending" in capsys.readouterr().out

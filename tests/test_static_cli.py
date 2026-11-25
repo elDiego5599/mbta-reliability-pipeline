@@ -25,12 +25,12 @@ def test_written_then_unchanged(tmp_path, gtfs_zip, capsys):
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     assert main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW) == 0
-    first = capsys.readouterr().out.strip()
+    first = capsys.readouterr().out.splitlines()[-1]
     assert first.startswith("written feed_version=Test, version A sha12=")
     assert first.endswith(" tables=3")
 
     assert main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW) == 0
-    second = capsys.readouterr().out.strip()
+    second = capsys.readouterr().out.splitlines()[-1]
     assert second.startswith("unchanged (304), feed_version=Test, version A sha12=")
 
     client.close()
@@ -51,7 +51,7 @@ def test_same_content_line(tmp_path, gtfs_zip, capsys):
     capsys.readouterr()
 
     assert main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW) == 0
-    line = capsys.readouterr().out.strip()
+    line = capsys.readouterr().out.splitlines()[-1]
     assert line.startswith("same content under a new ETag, feed_version=Test, version A sha12=")
 
     client.close()
@@ -63,7 +63,7 @@ def test_failure_exit_code(tmp_path, capsys):
     )
 
     assert main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW) == 1
-    assert capsys.readouterr().out.strip().startswith("failed: ")
+    assert capsys.readouterr().out.splitlines()[-1].startswith("failed: ")
 
     client.close()
 
@@ -75,7 +75,7 @@ def test_unexpected_exception_exit_code(tmp_path, capsys):
     client = httpx.Client(transport=httpx.MockTransport(handler))
 
     assert main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW) == 1
-    assert capsys.readouterr().out.strip() == "failed: RuntimeError: boom"
+    assert capsys.readouterr().out.splitlines()[-1] == "failed: RuntimeError: boom"
 
     client.close()
 
@@ -91,3 +91,10 @@ def test_script_registered():
     matches = [entry for entry in entry_points if entry.name == "mbta-static"]
     assert len(matches) == 1
     assert matches[0].value == "mbta_reliability.static_cli:main"
+
+
+def test_each_run_starts_with_utc_run_time(tmp_path, capsys):
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(304)))
+    main(["--data-dir", str(tmp_path)], client=client, now=lambda: NOW)
+    assert capsys.readouterr().out.splitlines()[0] == "run at 2026-11-24T12:00:00Z"
+    client.close()
