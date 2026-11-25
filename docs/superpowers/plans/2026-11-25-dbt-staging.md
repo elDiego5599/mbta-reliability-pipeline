@@ -319,8 +319,8 @@ version_ended_ts = header_ts of snapshot (last_idx + 1), null when none
   entity_index]`, `not_null` on each key column.
 - [ ] **Step 5:** Run `dbt build -s stg_alerts+`: PASS. On the three
   measured hours (no content change, 18 ended, none returned) expect 147
-  versions, 18 of them with `version_ended_ts` set, and 296,806 informed
-  entity rows.
+  versions, 18 of them with `version_ended_ts` set; the informed entity
+  count equals the sum of `len(informed_entity)` over those versions.
 - [ ] **Step 6:** Commit "Add stg_alerts and stg_alert_informed_entities".
 
 ### Task 7: spec and ADR amendments
