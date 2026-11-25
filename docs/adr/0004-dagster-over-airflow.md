@@ -5,9 +5,8 @@ Status: proposed, 2026-11-24
 ## Context
 
 The orchestrated work is small and regular: hourly compaction, a daily static
-GTFS check, a daily dbt build, data quality checks, a daily export to
-BigQuery, and bronze cleanup. It runs on one Mac, later one small VM. The
-30 second poller is not orchestrated (see [architecture](../architecture.md)).
+GTFS check, a daily dbt build, data quality checks, and bronze cleanup. It
+runs on one Mac, later one small VM. The 30 second poller is not orchestrated (see [architecture](../architecture.md)).
 
 ## Options
 

@@ -159,11 +159,10 @@ after a full week of real counts replaces them in this table.
 
 ## 5. Storage
 
-DuckDB is the warehouse; Parquet files are the source of truth beneath it.
-BigQuery sandbox serves the marts to the dashboard. See
-[ADR 0003](adr/0003-duckdb-then-bigquery.md) for the comparison with Postgres
-and for the BigQuery sandbox limits (10 GiB lifetime storage, 60 day table
-expiry) that confine it to marts.
+DuckDB is the only warehouse; Parquet files are the source of truth beneath
+it. The dashboard reads the DuckDB marts directly, so nothing is exported. See
+[ADR 0003](adr/0003-duckdb-warehouse.md) for the comparison with Postgres and
+BigQuery.
 
 ## 6. Transformation (phase 2)
 
@@ -255,7 +254,6 @@ assets:
   partitions, materialised at :05 for the previous hour.
 - `static_gtfs`: daily, materialised when the ETag changes.
 - dbt models loaded as assets through `dagster-dbt`, daily partitions.
-- `bigquery_marts`: daily, after dbt.
 - Asset checks for data quality (section 9) run with the asset they check;
   a failing check blocks downstream marts for that partition.
 
@@ -290,10 +288,15 @@ disk use.
 
 ## 11. Dashboard and findings (phase 4)
 
-Looker Studio report on the BigQuery marts
-([ADR 0006](adr/0006-looker-studio-dashboard.md)), linked from the README.
-Pages: network overview, route detail (headway p50 and p90 by hour against
-schedule, bunching), segment speed map, and data coverage.
+Evidence project on the DuckDB marts, built daily as a static site and
+published on free hosting, GitHub Pages first choice
+([ADR 0006](adr/0006-evidence-dashboard.md)), linked from the README. The
+hosted Evidence Studio service is not used. Pages: network overview, route
+detail (headway p50 and p90 by hour against schedule, bunching), segment speed
+map, and data coverage.
+
+Query results are embedded in the static build, so pages query aggregated
+marts only, never silver or row-level facts, to keep the site small and fast.
 
 The README findings section uses static charts rendered from DuckDB, so it
 keeps working if the dashboard is down.
@@ -305,7 +308,7 @@ keeps working if the dashboard is down.
 | MBTA feeds | Free |
 | Mac (phases 1 to 3) | Electricity only |
 | GitHub, Actions on a public repo | Free |
-| BigQuery sandbox, Looker Studio | Free, no card; the owner creates the account |
+| Evidence (MIT) and static hosting on GitHub Pages | Free |
 | VM (later) | Free tier or about USD 4 to 6 a month; needs the owner's approval |
 
 ## 13. Roadmap
@@ -315,7 +318,7 @@ keeps working if the dashboard is down.
 | 1. Ingestion | Poller, bronze, fetch log, compaction to silver, static versioning, launchd unit, pytest suite, CI | Seven days of data collected with coverage reported, and the volume table in section 3 replaced by measured numbers |
 | 2. dbt | Staging, intermediate and marts with tests and unit tests | `dbt build` green on real data; headways for 3 hand-checked routes match a manual calculation |
 | 3. Orchestration | Dagster assets, schedules and asset checks | One week of unattended daily runs with checks green or explained |
-| 4. Dashboard and findings | BigQuery export, Looker Studio report, README findings, validation against LAMP | Public dashboard linked; four weeks of findings; agreement with MBTA data reported |
+| 4. Dashboard and findings | Evidence static site on the DuckDB marts, README findings, validation against LAMP | Public dashboard linked; four weeks of findings; agreement with MBTA data reported |
 
 ## 14. Open questions
 
