@@ -41,6 +41,8 @@ def test_deleted_entity_kept(vehicles_payload):
     assert rows[0]["is_deleted"] is None
     assert rows[1]["is_deleted"] is True
     assert rows[1]["vehicle__id"] is None
+    columns = set(feed_schema("VehiclePositions").names) - {"header_ts", "entity_id", "is_deleted"}
+    assert all(rows[1][name] is None for name in columns)
 
 
 @pytest.mark.parametrize(
@@ -55,3 +57,10 @@ def test_rows_conform_to_schema(feed, fixture, request):
     rows = snapshot_rows(feed, 1, request.getfixturevalue(fixture))
     table = pa.Table.from_pylist(rows, schema=feed_schema(feed))
     assert table.num_rows == len(rows)
+    assert all(set(row) == set(feed_schema(feed).names) for row in rows)
+
+
+@pytest.mark.parametrize("feed", ["VehiclePositions", "TripUpdates", "Alerts"])
+def test_schema_names_are_unique(feed):
+    names = feed_schema(feed).names
+    assert len(set(names)) == len(names)

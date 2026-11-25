@@ -193,7 +193,15 @@ alone in that case.
 - A bronze file that fails zstd decompression or protobuf parsing stops the
   compaction of that hour for that feed with an error naming the file.
   Nothing is written for that hour. The bronze file stays in place for
-  inspection.
+  inspection. An unreadable bronze file is reported the same way.
+- A snapshot that carries fields or enum values unknown to the pinned
+  gtfs-realtime bindings (proto2 keeps them as unknown fields) is an error
+  naming the file, so a value is never silently stored as null. Nothing is
+  written for that hour until the bindings are upgraded.
+- The CLI exits 0 on success, 1 if any feed failed (any exception in one feed
+  is reported and the other feeds still run), 2 on invalid arguments
+  including a data directory without a `bronze` directory, and 3 when the
+  hour is not yet closed.
 - Late snapshots: a snapshot whose header falls inside an hour can be written
   after that hour was compacted (retries, stale objects). Re-running the hour
   then produces a file that includes it. That is accepted: silver is a pure

@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pyarrow.parquet as pq
 import pytest
 import zstandard
+from google.transit import gtfs_realtime_pb2
 
 from mbta_reliability import bronze
 from mbta_reliability.silver import CompactionError, compact_hour, feed_schema, silver_path
@@ -34,25 +37,27 @@ def test_rerun_is_byte_identical(feed_bytes, tmp_path):
     assert path.read_bytes() == first
 
 
-def test_creation_order_does_not_change_bytes(feed_bytes, tmp_path):
-    a, b = tmp_path / "a", tmp_path / "b"
-    _write(feed_bytes, a, [0, 30, 60, 90])
-    _write(feed_bytes, b, [90, 60, 30, 0])
-    path_a, _ = compact_hour(a, VP, "2026-11-24", 15)
-    path_b, _ = compact_hour(b, VP, "2026-11-24", 15)
-    assert path_a.read_bytes() == path_b.read_bytes()
+def test_listing_order_does_not_change_bytes(feed_bytes, tmp_path, monkeypatch):
+    _write(feed_bytes, tmp_path, [0, 30, 60, 90])
+    path, _ = compact_hour(tmp_path, VP, "2026-11-24", 15)
+    forward = path.read_bytes()
+    real_iterdir = Path.iterdir
+    monkeypatch.setattr(Path, "iterdir", lambda self: iter(reversed(list(real_iterdir(self)))))
+    compact_hour(tmp_path, VP, "2026-11-24", 15)
+    assert path.read_bytes() == forward
 
 
-def test_files_read_by_numeric_header_ts(feed_bytes, tmp_path):
-    # 999 sorts after 1000 by name string; numeric order must still put it first.
+def test_repeated_report_keeps_earliest_header_ts_by_numeric_order(feed_bytes, tmp_path):
+    # 999 sorts after 1000 by name string; the earliest numeric header_ts must still win.
     hour_dir = _hour_dir(tmp_path)
     hour_dir.mkdir(parents=True)
-    compressor = zstandard.ZstdCompressor()
+    payload = zstandard.ZstdCompressor().compress(feed_bytes(1000, 1))
     for ts in (1000, 999):
-        (hour_dir / f"{ts}.pb.zst").write_bytes(compressor.compress(feed_bytes(ts, 1)))
+        (hour_dir / f"{ts}.pb.zst").write_bytes(payload)
     path, n = compact_hour(tmp_path, VP, "2026-11-24", 15)
+    table = pq.read_table(path)
     assert n == 2
-    assert pq.read_table(path).num_rows == 2
+    assert table.column("header_ts").to_pylist() == [999]
 
 
 def test_empty_hour_returns_none(tmp_path):
@@ -132,3 +137,35 @@ def test_existing_file_untouched_when_hour_empty(tmp_path):
     target.write_bytes(b"known bytes")
     assert compact_hour(tmp_path, VP, "2026-11-24", 15) is None
     assert target.read_bytes() == b"known bytes"
+
+
+def test_unreadable_bronze_file_is_error_naming_file(feed_bytes, tmp_path, monkeypatch):
+    _write(feed_bytes, tmp_path, [0])
+
+    def boom(self):
+        raise OSError("input/output error")
+
+    monkeypatch.setattr(Path, "read_bytes", boom)
+    with pytest.raises(CompactionError, match=r"\.pb\.zst") as e:
+        compact_hour(tmp_path, VP, "2026-11-24", 15)
+    assert isinstance(e.value.__cause__, OSError)
+    assert not silver_path(tmp_path, VP, "2026-11-24", 15).exists()
+
+
+def test_unknown_field_is_error_and_writes_nothing(tmp_path):
+    msg = gtfs_realtime_pb2.FeedMessage()
+    msg.header.gtfs_realtime_version = "2.0"
+    entity = msg.entity.add()
+    entity.id = "v1"
+    entity.vehicle.vehicle.id = "v1"
+    # current_status = 99 is outside the closed enum, so proto2 keeps it as an unknown field.
+    entity.vehicle.MergeFromString(b"\x20\x63")
+    assert not entity.vehicle.HasField("current_status")
+    hour_dir = _hour_dir(tmp_path)
+    hour_dir.mkdir(parents=True)
+    (hour_dir / "1764000000.pb.zst").write_bytes(
+        zstandard.ZstdCompressor().compress(msg.SerializeToString())
+    )
+    with pytest.raises(CompactionError, match=r"1764000000\.pb\.zst.*unknown"):
+        compact_hour(tmp_path, VP, "2026-11-24", 15)
+    assert not silver_path(tmp_path, VP, "2026-11-24", 15).exists()

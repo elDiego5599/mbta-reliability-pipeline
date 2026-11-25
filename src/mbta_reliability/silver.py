@@ -40,16 +40,12 @@ def _element_type(field: FieldDescriptor) -> pa.DataType:
     return _SCALARS[field.cpp_type]
 
 
-def _is_repeated(field: FieldDescriptor) -> bool:
-    return field.is_repeated if hasattr(field, "is_repeated") else field.label == 3
-
-
 def arrow_type(descriptor: Descriptor) -> pa.StructType:
     """Arrow struct type mirroring a protobuf message, in descriptor field order."""
     fields = []
     for field in descriptor.fields:
         element = _element_type(field)
-        fields.append(pa.field(field.name, pa.list_(element) if _is_repeated(field) else element))
+        fields.append(pa.field(field.name, pa.list_(element) if field.is_repeated else element))
     return pa.struct(fields)
 
 
@@ -57,17 +53,17 @@ def _scalar_value(field: FieldDescriptor, value):
     if field.cpp_type == FieldDescriptor.CPPTYPE_MESSAGE:
         return message_value(value)
     if field.cpp_type == FieldDescriptor.CPPTYPE_ENUM:
-        enum_value = field.enum_type.values_by_number.get(value)
-        return enum_value.name if enum_value is not None else str(value)
+        # Numbers outside the closed enum are unknown fields, rejected before this point.
+        return field.enum_type.values_by_number[value].name
     return value
 
 
-def message_value(msg: Message) -> dict | None:
+def message_value(msg: Message) -> dict:
     """Plain dict shaped like arrow_type(msg.DESCRIPTOR); unset fields are None."""
     out = {}
     for field in msg.DESCRIPTOR.fields:
         raw = getattr(msg, field.name)
-        if _is_repeated(field):
+        if field.is_repeated:
             out[field.name] = [_scalar_value(field, v) for v in raw] or None
         elif msg.HasField(field.name):
             out[field.name] = _scalar_value(field, raw)
@@ -147,7 +143,14 @@ def _message_struct(feed: str) -> pa.StructType:
 def feed_schema(feed: str) -> pa.Schema:
     """Arrow schema of the flat silver rows for a feed."""
     fields, _ = _flatten(_message_struct(feed), None, FEEDS[feed].explode)
-    return pa.schema([*_BOOKKEEPING, *fields])
+    schema = pa.schema([*_BOOKKEEPING, *fields])
+    if len(set(schema.names)) != len(schema.names):
+        raise ValueError(f"duplicate column names in silver schema for {feed}")
+    return schema
+
+
+class UnknownFieldsError(ValueError):
+    """A snapshot carries fields or enum values the pinned bindings do not know."""
 
 
 def snapshot_rows(feed: str, header_ts: int, payload: bytes) -> list[dict]:
@@ -156,6 +159,11 @@ def snapshot_rows(feed: str, header_ts: int, payload: bytes) -> list[dict]:
     struct = _message_struct(feed)
     feed_message = gtfs_realtime_pb2.FeedMessage()
     feed_message.ParseFromString(payload)
+    stripped = gtfs_realtime_pb2.FeedMessage()
+    stripped.CopyFrom(feed_message)
+    stripped.DiscardUnknownFields()
+    if stripped.ByteSize() != feed_message.ByteSize():
+        raise UnknownFieldsError("snapshot has fields unknown to the gtfs-realtime bindings")
     out: list[dict] = []
     for entity in feed_message.entity:
         present = entity.HasField(spec.entity_field)
@@ -249,8 +257,13 @@ def compact_hour(data_dir: Path, feed: str, date: str, hour: int) -> tuple[Path,
         try:
             payload = decompressor.decompress(file.read_bytes())
             rows += snapshot_rows(feed, header_ts, payload)
-        except (zstandard.ZstdError, DecodeError) as exc:
-            raise CompactionError(f"cannot decode bronze file {file.name}: {exc}") from exc
+        except UnknownFieldsError as exc:
+            raise CompactionError(
+                f"bronze file {file.name} has fields unknown to the gtfs-realtime bindings; "
+                "upgrade the bindings before compacting"
+            ) from exc
+        except (OSError, zstandard.ZstdError, DecodeError) as exc:
+            raise CompactionError(f"cannot read bronze file {file.name}: {exc}") from exc
     table = pa.Table.from_pylist(dedup_sort(feed, rows), schema=feed_schema(feed))
     path = silver_path(data_dir, feed, date, hour)
     path.parent.mkdir(parents=True, exist_ok=True)

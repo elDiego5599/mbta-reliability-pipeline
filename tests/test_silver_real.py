@@ -28,7 +28,9 @@ def test_real_snapshot_compacts(tmp_path, feed):
     dest.parent.mkdir(parents=True)
     shutil.copy(fixture, dest)
 
-    path, n = compact_hour(tmp_path, feed, f"{at:%Y-%m-%d}", at.hour)
+    result = compact_hour(tmp_path, feed, f"{at:%Y-%m-%d}", at.hour)
+    assert result is not None
+    path, n = result
 
     table = pq.read_table(path)
     assert n == 1
@@ -37,3 +39,16 @@ def test_real_snapshot_compacts(tmp_path, feed):
     assert table.column("entity_id").null_count == 0
     for column in NON_NULL_COLUMNS[feed]:
         assert table.column(column).null_count == 0, column
+
+
+def test_vehicle_fixture_keeps_multi_carriage_entity(tmp_path):
+    (fixture,) = (FIXTURES / "VehiclePositions").glob("*.pb.zst")
+    header_ts = int(fixture.name.removesuffix(".pb.zst"))
+    at = datetime.fromtimestamp(header_ts, UTC)
+    dest = bronze.snapshot_path(tmp_path, "VehiclePositions", header_ts)
+    dest.parent.mkdir(parents=True)
+    shutil.copy(fixture, dest)
+    result = compact_hour(tmp_path, "VehiclePositions", f"{at:%Y-%m-%d}", at.hour)
+    assert result is not None
+    carriages = pq.read_table(result[0]).column("multi_carriage_details")
+    assert carriages.null_count < len(carriages)
