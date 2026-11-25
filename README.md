@@ -20,6 +20,7 @@ Looker Studio. Every choice is explained in an
 - [Architecture](docs/architecture.md): data flow, components, storage layout
 - [Specification](docs/spec.md): source facts, volume, models, metrics, roadmap
 - [Decisions](docs/adr/)
+- [Operations](docs/operations.md): running the pipeline unattended with launchd
 
 ## Data source and licence
 
