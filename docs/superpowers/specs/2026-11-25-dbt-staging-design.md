@@ -88,7 +88,13 @@ or a lost row here makes every metric wrong without a visible error.
   files, and adding a filter on the hour parsed from `filename` scans 1 of 6
   (checked with DuckDB 2.0.1 on a scratch tree of symlinks to real silver).
   The plan re-checks this with the DuckDB version `dbt-duckdb` pins, on the
-  real view.
+  real view. Re-checked on the built `staging.stg_trip_updates` (DuckDB
+  2.0.1, dbt-duckdb 1.11.1): `snapshot_date = '2026-11-25'` reads 4 of 4
+  files (all real data is from that day), `snapshot_date = '2026-01-01'`
+  shows the file filter `date = '2026-01-01'` and scans 0 of 4.
+- Full `make dbt-build` on the real data (2026-11-25): 95 nodes, 94 PASS and
+  the clamped rows test WARN (4 hours with clamped rows), 4.3 s wall time.
+  `stg_alerts` gives 226 versions for 180 alerts.
 
 ## Approaches
 
