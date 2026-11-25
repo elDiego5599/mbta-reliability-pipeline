@@ -1,0 +1,22 @@
+select
+    feed_version,
+    stop_id,
+    stop_code,
+    stop_name,
+    stop_desc,
+    platform_code,
+    platform_name,
+    cast(stop_lat as double) as stop_lat,
+    cast(stop_lon as double) as stop_lon,
+    zone_id,
+    stop_address,
+    stop_url,
+    level_id,
+    cast(location_type as integer) as location_type,
+    parent_station,
+    cast(wheelchair_boarding as integer) as wheelchair_boarding,
+    municipality,
+    on_street,
+    at_street,
+    cast(vehicle_type as integer) as vehicle_type
+from {{ source('static', 'stops') }}

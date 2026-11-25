@@ -1,0 +1,224 @@
+version: 2
+
+models:
+  - name: stg_static__versions
+    description: Static GTFS feed version index.
+    columns:
+      - name: feed_version
+        data_tests:
+          - unique
+          - not_null
+
+  - name: stg_static__trips
+    description: Static GTFS trips.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, trip_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_id
+        data_tests: [not_null]
+
+  - name: stg_static__stop_times
+    description: Static GTFS stop times.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, trip_id, stop_sequence]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+
+  - name: stg_static__stops
+    description: Static GTFS stops.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, stop_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: stop_id
+        data_tests: [not_null]
+
+  - name: stg_static__routes
+    description: Static GTFS routes.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, route_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: route_id
+        data_tests: [not_null]
+
+  - name: stg_static__route_patterns
+    description: Static GTFS route patterns.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, route_pattern_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: route_pattern_id
+        data_tests: [not_null]
+
+  - name: stg_static__shapes
+    description: Static GTFS shapes.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, shape_id, shape_pt_sequence]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: shape_id
+        data_tests: [not_null]
+      - name: shape_pt_sequence
+        data_tests: [not_null]
+
+  - name: stg_static__calendar
+    description: Static GTFS calendar.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, service_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: service_id
+        data_tests: [not_null]
+
+  - name: stg_static__calendar_dates
+    description: Static GTFS calendar exceptions.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, service_id, date]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: service_id
+        data_tests: [not_null]
+      - name: date
+        data_tests: [not_null]
+
+unit_tests:
+  - name: ut_stop_times_seconds
+    model: stg_static__stop_times
+    given:
+      - input: source('static', 'stop_times')
+        format: sql
+        rows: |
+          select
+            '11ed7da21c1b'::varchar as feed_version,
+            't1'::varchar as trip_id,
+            '00:00:00'::varchar as arrival_time,
+            '00:00:00'::varchar as departure_time,
+            1::integer as stop_sequence,
+            null::varchar as stop_id,
+            null::varchar as stop_headsign,
+            null::varchar as pickup_type,
+            null::varchar as drop_off_type,
+            null::varchar as timepoint,
+            null::varchar as checkpoint_id,
+            null::varchar as continuous_pickup,
+            null::varchar as continuous_drop_off
+          union all
+          select '11ed7da21c1b'::varchar, 't2'::varchar,
+            '08:05:09'::varchar, '08:05:09'::varchar,
+            2::integer, null::varchar, null::varchar, null::varchar,
+            null::varchar, null::varchar, null::varchar, null::varchar, null::varchar
+          union all
+          select '11ed7da21c1b'::varchar, 't3'::varchar,
+            '26:57:00'::varchar, '26:57:00'::varchar,
+            3::integer, null::varchar, null::varchar, null::varchar,
+            null::varchar, null::varchar, null::varchar, null::varchar, null::varchar
+          union all
+          select '11ed7da21c1b'::varchar, 't4'::varchar,
+            null::varchar, null::varchar,
+            4::integer, null::varchar, null::varchar, null::varchar,
+            null::varchar, null::varchar, null::varchar, null::varchar, null::varchar
+    expect:
+      format: sql
+      rows: |
+        select '11ed7da21c1b'::varchar as feed_version,
+          't1'::varchar as trip_id,
+          '00:00:00'::varchar as arrival_time,
+          0::integer as arrival_time_s,
+          '00:00:00'::varchar as departure_time,
+          0::integer as departure_time_s,
+          null::varchar as stop_id, 1::integer as stop_sequence,
+          null::varchar as stop_headsign, null::integer as pickup_type,
+          null::integer as drop_off_type, null::integer as timepoint,
+          null::varchar as checkpoint_id, null::integer as continuous_pickup,
+          null::integer as continuous_drop_off
+        union all
+        select '11ed7da21c1b'::varchar, 't2'::varchar,
+          '08:05:09'::varchar, 29109::integer,
+          '08:05:09'::varchar, 29109::integer,
+          null::varchar, 2::integer, null::varchar, null::integer,
+          null::integer, null::integer, null::varchar, null::integer,
+          null::integer
+        union all
+        select '11ed7da21c1b'::varchar, 't3'::varchar,
+          '26:57:00'::varchar, 97020::integer,
+          '26:57:00'::varchar, 97020::integer,
+          null::varchar, 3::integer, null::varchar, null::integer,
+          null::integer, null::integer, null::varchar, null::integer,
+          null::integer
+        union all
+        select '11ed7da21c1b'::varchar, 't4'::varchar,
+          null::varchar, null::integer,
+          null::varchar, null::integer,
+          null::varchar, 4::integer, null::varchar, null::integer,
+          null::integer, null::integer, null::varchar, null::integer,
+          null::integer

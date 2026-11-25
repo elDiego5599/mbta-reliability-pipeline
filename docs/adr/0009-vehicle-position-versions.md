@@ -93,7 +93,7 @@ Other facts from the same two hours:
   holds is lost in dbt.
 - Staging has about 1.6 % more rows than a one-report-per-`timestamp` model.
 - Models that order a vehicle's reports must sort by two columns, and
-  `int_stop_crossings` carries the observation time rules above. Its unit
+  `stg_vehicle_positions` carries the observation time rules above. Its unit
   tests cover a stop advance without a new `timestamp`, and a report with an
   old `timestamp` that arrives late (its observation time is clamped and the
   row is marked).
@@ -104,3 +104,13 @@ Snapshot staleness (spec 4.3) is flagged per feed, not per vehicle. Some
 vehicles keep the same `timestamp` for hours while they stay in the feed.
 Whether staging or the crossing models should drop, cap or only flag such
 reports, and at what age, is decided during phase 2.
+
+## Amendment, 2026-11-25
+
+The observation time rule moves from `int_stop_crossings` to
+`stg_vehicle_positions`, approved by Diego on 2026-11-25. The rule is per
+row, needs no stops or shapes, and computing it once lets crossings and any
+other model use the same columns. Staging gains three columns:
+`own_observation_ts` (the time the rule gives the row), `observation_ts`
+(the running maximum) and `observation_time_clamped`. The Decision section
+is otherwise unchanged; this section records the move.

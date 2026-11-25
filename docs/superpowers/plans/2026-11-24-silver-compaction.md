@@ -6,7 +6,7 @@
 
 **Architecture:** `silver.py` derives an Arrow schema from the protobuf descriptors, turns each snapshot into rows, deduplicates and sorts them in Python, and writes Parquet atomically. `compact.py` is a thin CLI over `compact_hour`.
 
-**Tech Stack:** Python 3.12, uv, `gtfs-realtime-bindings` (protobuf 7.x), `zstandard`, `pyarrow` (new), pytest.
+**Tech Stack:** Python 3.12, uv, `gtfs-realtime-bindings` (protobuf 7.x; amended 2026-11-25 to bindings 2.x and protobuf 6.x, see the dbt staging design), `zstandard`, `pyarrow` (new), pytest.
 
 **Spec:** `docs/superpowers/specs/2026-11-24-silver-compaction-design.md`
 

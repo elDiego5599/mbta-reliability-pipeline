@@ -1,0 +1,14 @@
+name: mbta_reliability
+version: "0.1.0"
+config-version: 2
+profile: mbta
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  mbta_reliability:
+    staging:
+      +schema: staging
+      +materialized: view

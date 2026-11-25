@@ -1,0 +1,56 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Hourly silver Parquet, one directory per feed and UTC date.
+    # dbt-duckdb runs str.format_map on external_location after Jinja. A brace
+    # meant for DuckDB is therefore rendered by Jinja as a doubled brace, which
+    # format_map turns back into one.
+    tables:
+      - name: vehicle_positions
+        identifier: VehiclePositions
+        meta: &silver_location
+          external_location: >-
+            read_parquet('{{ env_var("MBTA_DATA_DIR", "../data") }}/silver/{identifier}/*/*.parquet',
+            hive_partitioning = true, hive_types = {{ '{{' }}'date': 'DATE'{{ '}}' }},
+            union_by_name = true, filename = true)
+      - name: trip_updates
+        identifier: TripUpdates
+        meta: *silver_location
+      - name: alerts
+        identifier: Alerts
+        meta: *silver_location
+
+  - name: static
+    description: Static GTFS, one directory per stored feed version (sha12).
+    meta:
+      external_location: >-
+        read_parquet('{{ env_var("MBTA_DATA_DIR", "../data") }}/static/feed_version=*/{name}.parquet',
+        hive_partitioning = true, hive_types = {{ '{{' }}'feed_version': 'VARCHAR'{{ '}}' }})
+    tables:
+      - name: trips
+      - name: stop_times
+      - name: stops
+      - name: routes
+      - name: route_patterns
+      - name: shapes
+      - name: calendar
+      - name: calendar_dates
+      - name: versions
+        description: Index of stored static versions.
+        meta:
+          external_location: >-
+            read_parquet('{{ env_var("MBTA_DATA_DIR", "../data") }}/static/versions.parquet')
+
+  - name: ops
+    tables:
+      - name: fetch_log
+        description: One JSON line per poller fetch attempt.
+        meta:
+          external_location: >-
+            read_json('{{ env_var("MBTA_DATA_DIR", "../data") }}/fetch_log/*/*.jsonl',
+            format = 'newline_delimited',
+            hive_partitioning = true, hive_types = {{ '{{' }}'date': 'DATE'{{ '}}' }},
+            columns = {{ '{{' }}feed: 'VARCHAR', attempt: 'BIGINT', attempt_at: 'DOUBLE',
+            status: 'BIGINT', bytes: 'BIGINT', latency_ms: 'BIGINT', error: 'VARCHAR',
+            header_ts: 'BIGINT', stale: 'BOOLEAN', outcome: 'VARCHAR'{{ '}}' }})
