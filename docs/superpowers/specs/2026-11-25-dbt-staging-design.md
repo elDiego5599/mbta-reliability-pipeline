@@ -99,11 +99,12 @@ or a lost row here makes every metric wrong without a visible error.
 ## Approaches
 
 1. **Views over Parquet, full-rebuild tables where history is needed
-   (chosen).** Trip updates, static and fetch log are views: nothing is
-   copied and a filter on `date` reads only that day's files. Vehicle
-   positions and alerts are tables rebuilt whole on every build, because
-   dedup across hours, the running maximum of observation time and alert
-   versions need the whole history.
+   (chosen).** Trip updates and the fetch log are views: nothing is copied
+   and a filter on `date` reads only that day's files. The static models are
+   tables, so every cast is evaluated during the build, and they change only
+   once per feed version. Vehicle positions and alerts are tables rebuilt
+   whole on every build, because dedup across hours, the running maximum of
+   observation time and alert versions need the whole history.
 2. **Incremental by UTC date** with a lookback for dedup and the running
    maximum. Scales better, but alert versions and running maxima that cross
    days make the logic much harder to get right. Deferred to phase 3.
@@ -152,9 +153,11 @@ dbt/
 dbt runs from `dbt/` (a `make dbt-build` target does `cd dbt && uv run dbt
 build`). `profiles.yml` lives in the project, profile `mbta`, DuckDB path
 `env_var('MBTA_WAREHOUSE')`, default `../data/warehouse.duckdb`. The input
-root is `env_var('MBTA_DATA_DIR')`, default `../data`. Verification sets
-`MBTA_DATA_DIR` to the main checkout's `data/` and `MBTA_WAREHOUSE` to a file
-in the session scratchpad, so nothing under `data/` is written. Staging
+root is `env_var('MBTA_DATA_DIR')`, default `../data`; `make dbt-build`
+passes it as an absolute path, and running dbt directly needs an absolute
+`MBTA_DATA_DIR`, otherwise the views only work from `dbt/`. Verification
+sets `MBTA_DATA_DIR` to the main checkout's `data/` and `MBTA_WAREHOUSE` to a
+file in the session scratchpad, so nothing under `data/` is written. Staging
 models build in the schema `staging`.
 
 ### Sources
@@ -199,7 +202,8 @@ Grain and key (ADR 0009): one distinct version of a vehicle report,
    `current_status` or `trip__trip_id` is distinct (`IS DISTINCT FROM`) from
    the version just before it is observed at its `header_ts`. A later
    version that changes only other fields (occupancy, carriages, bearing)
-   keeps `timestamp`.
+   keeps the own time of the version before it; it does not fall back to
+   `timestamp`.
 3. **Running maximum.** Within (`vehicle__id`, `trip__trip_id`,
    `trip__start_date`), in canonical order (`timestamp`, `header_ts`),
    `observation_ts` is the running maximum of `own_observation_ts`.
@@ -284,11 +288,13 @@ Grain: one entity an alert version affects, key (`alert_id`,
 (`route_id`, `route_type`, `stop_id`, `direction_id`, `trip__trip_id`, and
 the rest). An alert with an empty list has no rows here.
 
-### Static models (views)
+### Static models (tables)
 
 `stg_static__trips`, `__stop_times`, `__stops`, `__routes`,
 `__route_patterns`, `__shapes`, `__calendar`, `__calendar_dates`, each over
 every stored version, with `feed_version` (the sha12 from the path) first.
+They are tables, so every cast is evaluated during the build, and they change
+only once per feed version.
 Keys, all tested unique and not null:
 
 | Model | Key |
@@ -312,7 +318,7 @@ service-day midnight through the macro `gtfs_time_to_seconds`
 (`arrival_time`, `arrival_time_s`). A value that fails a cast fails the
 build (strict `CAST`, never `TRY_CAST`), so a format change is seen.
 
-`stg_static__versions` (view on `versions.parquet`): one row per stored
+`stg_static__versions` (table on `versions.parquet`): one row per stored
 version, key `feed_version` (the sha12), with `feed_version_name` (MBTA's
 string), `feed_start_date` and `feed_end_date` as `DATE`, and the rest of
 the index columns. A `relationships` test from each static model's

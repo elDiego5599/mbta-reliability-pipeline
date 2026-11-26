@@ -1,13 +1,13 @@
 select
     feed_version,
     service_id,
-    cast(monday as integer) = 1 as monday,
-    cast(tuesday as integer) = 1 as tuesday,
-    cast(wednesday as integer) = 1 as wednesday,
-    cast(thursday as integer) = 1 as thursday,
-    cast(friday as integer) = 1 as friday,
-    cast(saturday as integer) = 1 as saturday,
-    cast(sunday as integer) = 1 as sunday,
+    {{ gtfs_bool('monday') }} as monday,
+    {{ gtfs_bool('tuesday') }} as tuesday,
+    {{ gtfs_bool('wednesday') }} as wednesday,
+    {{ gtfs_bool('thursday') }} as thursday,
+    {{ gtfs_bool('friday') }} as friday,
+    {{ gtfs_bool('saturday') }} as saturday,
+    {{ gtfs_bool('sunday') }} as sunday,
     strptime(start_date, '%Y%m%d')::date as start_date,
     strptime(end_date, '%Y%m%d')::date as end_date
 from {{ source('static', 'calendar') }}

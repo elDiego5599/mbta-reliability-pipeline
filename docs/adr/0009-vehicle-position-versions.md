@@ -62,11 +62,13 @@ Other facts from the same two hours:
 - **Observation time in `int_stop_crossings`:** a report's first version is
   observed at `timestamp`. A later version that changes `stop_id`,
   `current_stop_sequence`, `current_status` or `trip__trip_id` is observed at
-  its `header_ts`, because the feed made the change after `timestamp`. The
-  change happened between the previous snapshot and `header_ts`, so the error
-  is at most one poller interval: about 30 s, and 60 s when a snapshot is
-  missing. This bound is part of `crossing_uncertainty_s` (spec 6.2) and is
-  stated in the dashboard method notes.
+  its `header_ts`, because the feed made the change after `timestamp`. A later
+  version that changes only other fields keeps the own time of the version
+  before it; it does not fall back to `timestamp`. The change happened between
+  the previous snapshot and `header_ts`, so the error is at most one poller
+  interval: about 30 s, and 60 s when a snapshot is missing. This bound is
+  part of `crossing_uncertainty_s` (spec 6.2) and is stated in the dashboard
+  method notes.
 - **Observation time never goes backward.** Within each vehicle and trip, in
   canonical order, the observation time is the running maximum of the times
   above. A row whose own time is below that maximum is marked
@@ -114,7 +116,9 @@ row, needs no stops or shapes, and computing it once lets crossings and any
 other model use the same columns. Staging gains three columns:
 `own_observation_ts` (the time the rule gives the row), `observation_ts`
 (the running maximum) and `observation_time_clamped`. The Decision section
-is otherwise unchanged; this section records the move.
+is otherwise unchanged; this section records the move. The observation time
+wording was corrected on 2026-11-25 after review: a later version that changes
+only other fields keeps the own time of the version before it.
 
 ## Amendment, 2026-11-26
 
