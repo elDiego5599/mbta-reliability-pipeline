@@ -440,6 +440,38 @@ in-scope vehicle position has an active static version (warn).
 Then `make dbt-build` on the real data, with the row counts and build time
 recorded here.
 
+## Real-data build (2026-11-26)
+
+`dbt build` on silver from 2026-11-25 15:05 to 2026-11-26 19:59 UTC (976,348
+vehicle position versions), after merging main (staging fixes F1 to F9):
+163 nodes, 161 pass, 2 warnings, no errors, 9 s. The warnings are
+`stg_vehicle_positions_clamped_per_hour` (18) and `assert_crossings_monotonic`
+(28). No intermediate column has an unsigned type.
+
+- Active versions: `11ed7da21c1b` for 2026-11-16 to 11-25 (earliest covering
+  until 11-24, seen before the day on 11-25), `bda9e6a43961` from 11-26 to
+  12-12 (seen before the day). This matches the first-seen times above.
+- Measure points: 632 route directions per two versions; 560
+  `single_pattern`, 68 `common_timepoint`, 4 `primary_only`. Red direction 0
+  measures at `place-dwnxg` (stop `70077`, position 9 of 18), as expected;
+  Red direction 1 at `place-sstat` (stop `70080`, position 9 of 18).
+- Trip paths: 436,227 rows; 15,100 scheduled trips and 647 pattern matched.
+  Rapid transit trips with a path: 3,350 of 3,378 (99.2 %), 646 of them
+  pattern matched.
+- Crossings: 98,821 over 13,388 trips; 78,081 `stopped`, 19,800
+  `interpolated`, 940 `terminal_arrival`; 55 use a clamped report.
+- `crossing_uncertainty_s`: p50 35 s, p90 221 s, p99 1,998 s, maximum 16,959
+  s; 7,486 crossings above 10 minutes and 87 above an hour. The long tail
+  comes from the poller gap: vehicle positions were polled only a few times
+  an hour from about 03:00 to 14:00 UTC on 11-26, and 9,027 crossings have a
+  bracket spanning a minute with no poll. The uncertainty shows it as
+  designed; marts should filter on it.
+- Feed coverage: 5,262 rows. Vehicle positions per UTC hour are 1.0 in
+  normal hours, 0.0 to 0.03 during the gap. Two hours compute slightly above
+  1 (1.008) as the sum of `fresh_successes` over the sum of
+  `expected_polls`, because a minute can hold three fresh polls; marts
+  should cap the hour value at 1.
+
 ## Builder check (2026-11-25)
 
 A fresh reviewer read this document as the builder. Its four questions were
