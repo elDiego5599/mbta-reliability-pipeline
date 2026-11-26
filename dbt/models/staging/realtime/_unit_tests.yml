@@ -124,6 +124,39 @@ unit_tests:
       rows:
         - {trip__trip_id: 'T1', header_ts: 100, own_observation_ts: 90, observation_ts: 90, observation_time_clamped: false}
         - {trip__trip_id: 'T1', header_ts: 130, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
+  - name: ut_vp_occupancy_after_advance
+    description: >-
+      A later version that changes only occupancy after a stop advance keeps the own time of the version before it.
+    model: stg_vehicle_positions
+    given:
+      - input: source('silver', 'vehicle_positions')
+        format: sql
+        rows: |
+          select
+            vehicle__id::varchar as vehicle__id,
+            vehicle__label::varchar as vehicle__label,
+            trip__trip_id::varchar as trip__trip_id,
+            trip__start_date::varchar as trip__start_date,
+            trip__direction_id::uinteger as trip__direction_id,
+            stop_id::varchar as stop_id,
+            current_stop_sequence::uinteger as current_stop_sequence,
+            current_status::varchar as current_status,
+            occupancy_status::varchar as occupancy_status,
+            occupancy_percentage::uinteger as occupancy_percentage,
+            timestamp::ubigint as timestamp,
+            header_ts::bigint as header_ts,
+            filename::varchar as filename,
+            date::date as date
+          from (values
+            ('v1', 'L1', 'T1', '20261125', 0, 's1', 1, 'STOPPED_AT', 'EMPTY', null, 90, 100, 'hour=15.parquet', '2026-11-25'),
+            ('v1', 'L1', 'T1', '20261125', 0, 's2', 2, 'STOPPED_AT', 'EMPTY', null, 90, 130, 'hour=15.parquet', '2026-11-25'),
+            ('v1', 'L1', 'T1', '20261125', 0, 's2', 2, 'STOPPED_AT', 'FULL', null, 90, 160, 'hour=15.parquet', '2026-11-25')
+          ) as v(vehicle__id, vehicle__label, trip__trip_id, trip__start_date, trip__direction_id, stop_id, current_stop_sequence, current_status, occupancy_status, occupancy_percentage, timestamp, header_ts, filename, date)
+    expect:
+      rows:
+        - {trip__trip_id: 'T1', header_ts: 100, own_observation_ts: 90, observation_ts: 90, observation_time_clamped: false}
+        - {trip__trip_id: 'T1', header_ts: 130, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
+        - {trip__trip_id: 'T1', header_ts: 160, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
   - name: ut_vp_occupancy_only
     description: >-
       A later version that changes only occupancy keeps timestamp.

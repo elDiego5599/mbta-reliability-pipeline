@@ -25,8 +25,9 @@ typed as (
 ),
 
 own as (
-    -- The first version of a report is observed at timestamp; a later one that
-    -- moves the vehicle (stop, sequence, status or trip) at its header_ts.
+    -- The own time is the running maximum, within (vehicle__id, timestamp) in
+    -- header_ts order, of timestamp for a first or non-moving version and of
+    -- header_ts for a later version that moves the vehicle.
     select
         *,
         case
@@ -41,6 +42,17 @@ own as (
     window same_report as (partition by vehicle__id, timestamp order by header_ts)
 ),
 
+own_running as (
+    select
+        * exclude (own_observation_ts),
+        max(own_observation_ts) over (
+            partition by vehicle__id, timestamp
+            order by header_ts
+            rows between unbounded preceding and current row
+        ) as own_observation_ts
+    from own
+),
+
 observed as (
     select
         *,
@@ -49,7 +61,7 @@ observed as (
             order by timestamp, header_ts
             rows between unbounded preceding and current row
         ) as observation_ts
-    from own
+    from own_running
 )
 
 select

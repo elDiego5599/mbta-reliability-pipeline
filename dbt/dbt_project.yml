@@ -12,3 +12,5 @@ models:
     staging:
       +schema: staging
       +materialized: view
+      static:
+        +materialized: table
