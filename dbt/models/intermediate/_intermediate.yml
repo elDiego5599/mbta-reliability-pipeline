@@ -133,3 +133,17 @@ models:
           - accepted_values:
               arguments:
                 values: [scheduled, pattern_match]
+
+  - name: int_feed_coverage
+    description: One feed and UTC minute of poll coverage.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed, minute_ts]
+    columns:
+      - name: feed
+        data_tests: [not_null]
+      - name: minute_ts
+        data_tests: [not_null]
+      - name: coverage
+        data_tests: [not_null]

@@ -606,3 +606,53 @@ unit_tests:
     expect:
       rows:
         - {trip_id: 'T4', stop_sequence: 3, checkpoint_id: 'c3', vehicle__id: 'v5', vehicle_count: 1, crossing_method: 'terminal_arrival', crossing_ts: 4030.0, before_observation_ts: 4000, after_observation_ts: 4030, crossing_uncertainty_s: 30.0, uses_clamped_report: false}
+
+  - name: ut_feed_coverage
+    description: >-
+      One feed and UTC minute row is emitted for every minute in the fetch
+      log range, with retries excluded and stale successes not fresh.
+    model: int_feed_coverage
+    given:
+      - input: ref('stg_fetch_log')
+        format: sql
+        rows: |
+          select
+            f.feed::varchar as feed,
+            f.attempt_at::double as attempt_at,
+            f.outcome::varchar as outcome,
+            f.stale::boolean as stale
+          from (values
+            ('VehiclePositions', 1795564800.0, 'written', false),
+            ('VehiclePositions', 1795564830.0, 'written', true),
+            ('VehiclePositions', 1795564831.0, 'retry', null),
+            ('VehiclePositions', 1795564835.0, 'failed', null),
+            ('VehiclePositions', 1795564836.0, 'invalid', null),
+            ('VehiclePositions', 1795564920.0, 'written', false),
+            ('Alerts', 1795564805.0, 'unchanged', null),
+            ('TripUpdates', 1795564810.0, 'duplicate', false)
+          ) as f(feed, attempt_at, outcome, stale)
+    expect:
+      format: sql
+      rows: |
+        select
+          v.feed::varchar as feed,
+          v.minute_ts::bigint as minute_ts,
+          v.expected_polls::double as expected_polls,
+          v.polls::bigint as polls,
+          v.successes::bigint as successes,
+          v.fresh_successes::bigint as fresh_successes,
+          v.written::bigint as written,
+          v.failed::bigint as failed,
+          v.stale::bigint as stale,
+          v.coverage::double as coverage
+        from (values
+          ('VehiclePositions', 1795564800, 2.0, 4, 2, 1, 2, 2, 1, 0.5),
+          ('VehiclePositions', 1795564860, 2.0, 0, 0, 0, 0, 0, 0, 0.0),
+          ('VehiclePositions', 1795564920, 2.0, 1, 1, 1, 1, 0, 0, 0.5),
+          ('Alerts', 1795564800, 1.0, 1, 1, 1, 0, 0, 0, 1.0),
+          ('Alerts', 1795564860, 1.0, 0, 0, 0, 0, 0, 0, 0.0),
+          ('Alerts', 1795564920, 1.0, 0, 0, 0, 0, 0, 0, 0.0),
+          ('TripUpdates', 1795564800, 0.2, 1, 1, 1, 0, 0, 0, 1.0),
+          ('TripUpdates', 1795564860, 0.2, 0, 0, 0, 0, 0, 0, 0.0),
+          ('TripUpdates', 1795564920, 0.2, 0, 0, 0, 0, 0, 0, 0.0)
+        ) as v(feed, minute_ts, expected_polls, polls, successes, fresh_successes, written, failed, stale, coverage)
