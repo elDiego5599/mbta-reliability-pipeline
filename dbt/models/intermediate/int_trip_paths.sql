@@ -202,7 +202,10 @@ ranked_patterns as (
                 scored_patterns.trip_id
             order by
                 scored_patterns.match_count desc,
-                scored_patterns.route_pattern_typicality,
+                case
+                    when scored_patterns.route_pattern_typicality = 0 then 99
+                    else scored_patterns.route_pattern_typicality
+                end,
                 scored_patterns.route_pattern_sort_order,
                 scored_patterns.route_pattern_id
         ) as pattern_rank

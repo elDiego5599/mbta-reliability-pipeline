@@ -14,6 +14,7 @@ with reports as (
         vp.header_ts,
         vp.observation_ts,
         vp.observation_time_clamped,
+        -- The sequence and status keys guard against a duplicate staging key.
         row_number() over (
             partition by
                 vp.vehicle__id,
@@ -21,7 +22,9 @@ with reports as (
                 vp.trip__start_date
             order by
                 vp.timestamp,
-                vp.header_ts
+                vp.header_ts,
+                vp.current_stop_sequence,
+                vp.current_status
         ) as rn
     from {{ ref('stg_vehicle_positions') }} as vp
     where vp.trip__trip_id is not null
@@ -112,8 +115,18 @@ brackets as (
           and trip_id = paths.trip_id
           and vehicle__id = vehicles.vehicle__id
           and rn < after_report.rn
+          and current_stop_sequence < paths.stop_sequence
+    ) as lower_report
+    cross join lateral (
+        select max(rn) as rn
+        from reports_with_lateness
+        where service_date = paths.service_date
+          and trip_id = paths.trip_id
+          and vehicle__id = vehicles.vehicle__id
+          and rn < after_report.rn
           and current_stop_sequence = paths.stop_sequence
           and current_status = 'STOPPED_AT'
+          and rn > coalesce(lower_report.rn, 0)
     ) as stopped_report
     where after_report.rn is not null
       and before_report.rn is not null
@@ -236,13 +249,15 @@ path_edges as (
         path.stop_sequence,
         path.stop_lat,
         path.stop_lon,
-        lag(path.stop_lat) over (
+        last_value(path.stop_lat ignore nulls) over (
             partition by path.service_date, path.trip_id
             order by path.stop_sequence
+            rows between unbounded preceding and 1 preceding
         ) as previous_lat,
-        lag(path.stop_lon) over (
+        last_value(path.stop_lon ignore nulls) over (
             partition by path.service_date, path.trip_id
             order by path.stop_sequence
+            rows between unbounded preceding and 1 preceding
         ) as previous_lon
     from {{ ref('int_trip_paths') }} as path
 ),
@@ -252,7 +267,11 @@ path_cumulative as (
         path_edges.*,
         sum(
             case
-                when previous_lat is null or previous_lon is null then 0.0
+                when previous_lat is null
+                  or previous_lon is null
+                  or stop_lat is null
+                  or stop_lon is null
+                then 0.0
                 else {{ haversine_m(
                     'previous_lat',
                     'previous_lon',
@@ -274,11 +293,15 @@ path_bounds as (
         min(case
                 when path.stop_sequence >= crossing_reports.before_seq
                  and path.stop_sequence < crossing_reports.after_seq
+                 and path.stop_lat is not null
+                 and path.stop_lon is not null
                 then path.stop_sequence
             end) as first_seq,
         max(case
                 when path.stop_sequence >= crossing_reports.before_seq
                  and path.stop_sequence < crossing_reports.after_seq
+                 and path.stop_lat is not null
+                 and path.stop_lon is not null
                 then path.stop_sequence
             end) as last_seq
     from crossing_reports

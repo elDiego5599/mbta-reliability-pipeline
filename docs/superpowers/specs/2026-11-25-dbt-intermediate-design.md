@@ -275,7 +275,8 @@ For each trip, using the active version of its service date:
   distinct observed (`stop_id`, `current_stop_sequence`) pairs of the trip
   (over all its vehicles and reports) that appear in the stop times of the
   pattern's representative trip. The best pattern has the highest score, then the
-  lowest `route_pattern_typicality`, then the lowest
+  lowest `route_pattern_typicality` (0, which MBTA uses for "not defined",
+  ranks after 1 to 5), then the lowest
   `route_pattern_sort_order`, then `route_pattern_id`. It is used when it
   matches at least one pair and at least half of the trip's distinct pairs;
   otherwise the trip has no path and no crossings. The path is the
@@ -323,12 +324,15 @@ for each vehicle:
 **Time.**
 
 1. `stopped`: if a report before `after` is `STOPPED_AT` with
-   `current_stop_sequence = seq_s`, the crossing time is the
-   `observation_ts` of the last such report, and that report replaces
-   `before` for the uncertainty.
+   `current_stop_sequence = seq_s`, and no report between it and `after`
+   has `current_stop_sequence < seq_s` (so a visit before a backward
+   sequence does not count), the crossing time is the `observation_ts` of
+   the last such report, and that report replaces `before` for the
+   uncertainty.
 2. `interpolated`: otherwise, the polyline runs from the `before` position,
    through the path stops with `before.current_stop_sequence <= sequence <
-   after.current_stop_sequence` in order, to the `after` position; segment
+   after.current_stop_sequence` in order, to the `after` position; path
+   stops with a null `stop_lat` or `stop_lon` are skipped, and segment
    lengths come from the `haversine_m` macro. With L the total length and
    l_s the length up to stop s, the time is `before.observation_ts + (l_s /
    L) * (after.observation_ts - before.observation_ts)`, and l_s / L is
@@ -458,8 +462,10 @@ vehicle position versions), after merging main (staging fixes F1 to F9):
 - Trip paths: 436,227 rows; 15,100 scheduled trips and 647 pattern matched.
   Rapid transit trips with a path: 3,350 of 3,378 (99.2 %), 646 of them
   pattern matched.
-- Crossings: 98,821 over 13,388 trips; 78,081 `stopped`, 19,800
-  `interpolated`, 940 `terminal_arrival`; 55 use a clamped report.
+- Crossings: 98,821 over 13,388 trips; 78,076 `stopped`, 19,805
+  `interpolated`, 940 `terminal_arrival`; 55 use a clamped report. (Before
+  the pre-PR review the counts were 78,081 and 19,800: 5 crossings took a
+  `STOPPED_AT` from a visit before a backward sequence.)
 - `crossing_uncertainty_s`: p50 35 s, p90 221 s, p99 1,998 s, maximum 16,959
   s; 7,486 crossings above 10 minutes and 87 above an hour. The long tail
   comes from the poller gap: vehicle positions were polled only a few times

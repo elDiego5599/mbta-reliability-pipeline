@@ -299,6 +299,108 @@ unit_tests:
         - {route_id: 'RED', direction_id: 0, route_pattern_id: 'P_BR', stop_id: 'c1', station_id: 'place-c', stop_sequence: 3, position: 3, pattern_stop_count: 7, typical_pattern_count: 2, selection: 'common_timepoint'}
         - {route_id: 'NOSHARE', direction_id: 0, route_pattern_id: 'P_N1', stop_id: 'n2', station_id: 'n2', stop_sequence: 2, position: 2, pattern_stop_count: 3, typical_pattern_count: 2, selection: 'primary_only'}
 
+  - name: ut_trip_paths_typicality_zero
+    description: >-
+      Typicality 0 means not defined and ranks after ordinary patterns.
+    model: int_trip_paths
+    given:
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            v.service_date::date as service_date,
+            v.feed_version::varchar as feed_version
+          from (values
+            ('2026-11-25', 'V')
+          ) as v(service_date, feed_version)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.trip__route_id::varchar as trip__route_id,
+            v.trip__direction_id::integer as trip__direction_id,
+            v.stop_id::varchar as stop_id,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.vehicle__id::varchar as vehicle__id
+          from (values
+            ('T_TYP', '20261125', 'R', 0, 'sa', 1, 'v1'),
+            ('T_TYP', '20261125', 'R', 0, 'sb', 2, 'v1')
+          ) as v(trip__trip_id, trip__start_date, trip__route_id, trip__direction_id, stop_id, current_stop_sequence, vehicle__id)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.route_id::varchar as route_id,
+            t.service_id::varchar as service_id,
+            t.trip_id::varchar as trip_id,
+            t.direction_id::integer as direction_id,
+            t.route_pattern_id::varchar as route_pattern_id
+          from (values
+            ('V', 'R', 'WKD', 'T0', 0, 'P0'),
+            ('V', 'R', 'WKD', 'T2', 0, 'P2')
+          ) as t(feed_version, route_id, service_id, trip_id, direction_id, route_pattern_id)
+      - input: ref('stg_static__route_patterns')
+        format: sql
+        rows: |
+          select
+            p.feed_version::varchar as feed_version,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_typicality::integer as route_pattern_typicality,
+            p.route_pattern_sort_order::integer as route_pattern_sort_order,
+            p.representative_trip_id::varchar as representative_trip_id
+          from (values
+            ('V', 'P0', 'R', 0, 0, 1, 'T0'),
+            ('V', 'P2', 'R', 0, 2, 100, 'T2')
+          ) as p(feed_version, route_pattern_id, route_id, direction_id, route_pattern_typicality, route_pattern_sort_order, representative_trip_id)
+      - input: ref('stg_static__stop_times')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.stop_id::varchar as stop_id,
+            s.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('V', 'T0', 1, 'sa', 'cp_sa'),
+            ('V', 'T0', 2, 'sb', 'cp_sb'),
+            ('V', 'T2', 1, 'sa', 'cp_sa'),
+            ('V', 'T2', 2, 'sb', 'cp_sb')
+          ) as s(feed_version, trip_id, stop_sequence, stop_id, checkpoint_id)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.parent_station::varchar as parent_station,
+            s.stop_lat::double as stop_lat,
+            s.stop_lon::double as stop_lon
+          from (values
+            ('V', 'sa', null, 42.0, -71.0),
+            ('V', 'sb', null, 42.01, -71.0)
+          ) as s(feed_version, stop_id, parent_station, stop_lat, stop_lon)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_type::integer as route_type,
+            r.route_desc::varchar as route_desc
+          from (values
+            ('V', 'R', 1, 'Rapid Transit')
+          ) as r(feed_version, route_id, route_type, route_desc)
+    expect:
+      rows:
+        - {trip_id: 'T_TYP', route_id: 'R', direction_id: 0, route_pattern_id: 'P2', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 1, stop_id: 'sa', checkpoint_id: 'cp_sa', is_last_stop: false}
+        - {trip_id: 'T_TYP', route_id: 'R', direction_id: 0, route_pattern_id: 'P2', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 2, stop_id: 'sb', checkpoint_id: 'cp_sb', is_last_stop: true}
+
   - name: ut_trip_paths
     description: >-
       A trip uses its scheduled path or the active-version pattern with the
@@ -544,6 +646,469 @@ unit_tests:
         - {trip_id: 'T2', stop_sequence: 3, checkpoint_id: 'c3', vehicle__id: 'v2', vehicle_count: 1, crossing_method: 'interpolated', crossing_ts: 2030.0, before_observation_ts: 2000, after_observation_ts: 2060, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
         - {trip_id: 'T3', stop_sequence: 1, checkpoint_id: 'c1', vehicle__id: 'b', vehicle_count: 3, crossing_method: 'stopped', crossing_ts: 2990.0, before_observation_ts: 2990, after_observation_ts: 3050, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
         - {trip_id: 'T4', stop_sequence: 1, checkpoint_id: 'c1', vehicle__id: 'v4', vehicle_count: 1, crossing_method: 'stopped', crossing_ts: 4000.0, before_observation_ts: 4000, after_observation_ts: 4060, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
+
+  - name: ut_trip_paths_half_share
+    description: >-
+      A pattern match share of exactly one half is accepted.
+    model: int_trip_paths
+    given:
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            v.service_date::date as service_date,
+            v.feed_version::varchar as feed_version
+          from (values
+            ('2026-11-25', 'V')
+          ) as v(service_date, feed_version)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.trip__route_id::varchar as trip__route_id,
+            v.trip__direction_id::integer as trip__direction_id,
+            v.stop_id::varchar as stop_id,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.vehicle__id::varchar as vehicle__id
+          from (values
+            ('T_HALF', '20261125', 'R', 0, 'ha', 1, 'v1'),
+            ('T_HALF', '20261125', 'R', 0, 'zz', 9, 'v1')
+          ) as v(trip__trip_id, trip__start_date, trip__route_id, trip__direction_id, stop_id, current_stop_sequence, vehicle__id)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.route_id::varchar as route_id,
+            t.service_id::varchar as service_id,
+            t.trip_id::varchar as trip_id,
+            t.direction_id::integer as direction_id,
+            t.route_pattern_id::varchar as route_pattern_id
+          from (values
+            ('V', 'R', 'WKD', 'T_REP', 0, 'P_HALF')
+          ) as t(feed_version, route_id, service_id, trip_id, direction_id, route_pattern_id)
+      - input: ref('stg_static__route_patterns')
+        format: sql
+        rows: |
+          select
+            p.feed_version::varchar as feed_version,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_typicality::integer as route_pattern_typicality,
+            p.route_pattern_sort_order::integer as route_pattern_sort_order,
+            p.representative_trip_id::varchar as representative_trip_id
+          from (values
+            ('V', 'P_HALF', 'R', 0, 1, 10, 'T_REP')
+          ) as p(feed_version, route_pattern_id, route_id, direction_id, route_pattern_typicality, route_pattern_sort_order, representative_trip_id)
+      - input: ref('stg_static__stop_times')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.stop_id::varchar as stop_id,
+            s.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('V', 'T_REP', 1, 'ha', 'cp_ha'),
+            ('V', 'T_REP', 2, 'hb', null)
+          ) as s(feed_version, trip_id, stop_sequence, stop_id, checkpoint_id)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.parent_station::varchar as parent_station,
+            s.stop_lat::double as stop_lat,
+            s.stop_lon::double as stop_lon
+          from (values
+            ('V', 'ha', null, 42.0, -71.0),
+            ('V', 'hb', null, 42.01, -71.0)
+          ) as s(feed_version, stop_id, parent_station, stop_lat, stop_lon)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_type::integer as route_type,
+            r.route_desc::varchar as route_desc
+          from (values
+            ('V', 'R', 1, 'Rapid Transit')
+          ) as r(feed_version, route_id, route_type, route_desc)
+    expect:
+      rows:
+        - {trip_id: 'T_HALF', route_id: 'R', direction_id: 0, route_pattern_id: 'P_HALF', trip_source: 'pattern_match', match_share: 0.5, stop_sequence: 1, stop_id: 'ha', checkpoint_id: 'cp_ha', is_last_stop: false}
+        - {trip_id: 'T_HALF', route_id: 'R', direction_id: 0, route_pattern_id: 'P_HALF', trip_source: 'pattern_match', match_share: 0.5, stop_sequence: 2, stop_id: 'hb', checkpoint_id: null, is_last_stop: true}
+
+  - name: ut_stop_crossings_polyline
+    description: >-
+      Crossing interpolation follows the polyline path rather than a straight line.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TPOLY', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TPOLY', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', null, 42.006, -70.98, false),
+            ('2026-11-25', 'TPOLY', 'V', 'R', 0, 'P', 'scheduled', 3, 'c3', 'c3', 'c3', 42.012, -71.0, false),
+            ('2026-11-25', 'TPOLY', 'V', 'R', 0, 'P', 'scheduled', 4, 'c4', 'c4', 'c4', 42.02, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vp', 'TPOLY', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1000, 1000, 1000, false),
+            ('vp', 'TPOLY', '20261125', 4, 'IN_TRANSIT_TO', 42.02, -71.0, 1060, 1060, 1060, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TPOLY', stop_sequence: 1, checkpoint_id: 'c1', crossing_ts: 1000.0}
+        - {trip_id: 'TPOLY', stop_sequence: 3, checkpoint_id: 'c3', crossing_ts: 1048.016}
+
+  - name: ut_stop_crossings_report_order
+    description: >-
+      Reports are ordered by timestamp and header_ts, not by header_ts alone.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TORDER', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TORDER', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', null, 42.01, -71.0, false),
+            ('2026-11-25', 'TORDER', 'V', 'R', 0, 'P', 'scheduled', 3, 'c3', 'c3', 'c3', 42.02, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vo', 'TORDER', '20261125', 1, 'STOPPED_AT', 42.0, -71.0, 1000, 1000, 1000, false),
+            ('vo', 'TORDER', '20261125', 2, 'IN_TRANSIT_TO', 42.01, -71.0, 1030, 1090, 1030, false),
+            ('vo', 'TORDER', '20261125', 2, 'IN_TRANSIT_TO', 42.01, -71.0, 1060, 1060, 1060, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TORDER', stop_sequence: 1, checkpoint_id: 'c1', crossing_method: 'stopped', crossing_ts: 1000.0, before_observation_ts: 1000, after_observation_ts: 1030, crossing_uncertainty_s: 30.0}
+
+  - name: ut_stop_crossings_zero_length
+    description: >-
+      Zero-length path edges use one half for interpolation.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TZERO', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TZERO', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', null, 42.0, -71.0, false),
+            ('2026-11-25', 'TZERO', 'V', 'R', 0, 'P', 'scheduled', 3, 'c3', 'c3', 'c3', 42.0, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vz', 'TZERO', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1000, 1000, 1000, false),
+            ('vz', 'TZERO', '20261125', 2, 'IN_TRANSIT_TO', 42.0, -71.0, 1060, 1060, 1060, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TZERO', stop_sequence: 1, checkpoint_id: 'c1', crossing_method: 'interpolated', crossing_ts: 1030.0}
+
+  - name: ut_stop_crossings_feed_lateness
+    description: >-
+      Feed lateness uses the previous distinct whole-feed header_ts.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TLATE', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TLATE', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', 'c2', 42.01, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('a', 'TLATE', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1000, 1000, 1000, false),
+            ('a', 'TLATE', '20261125', 2, 'IN_TRANSIT_TO', 42.01, -71.0, 1050, 1060, 1060, false),
+            ('b', 'TB', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1020, 1030, 1030, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TLATE', stop_sequence: 1, checkpoint_id: 'c1', crossing_uncertainty_s: 90.0}
+
+  - name: ut_stop_crossings_stopped_clamped
+    description: >-
+      A stopped crossing is marked clamped when its stopped report is clamped.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TCLAMP', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TCLAMP', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', 'c2', 42.01, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vc', 'TCLAMP', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1020, 1050, 1050, false),
+            ('vc', 'TCLAMP', '20261125', 1, 'STOPPED_AT', 42.0, -71.0, 1040, 1040, 1050, true),
+            ('vc', 'TCLAMP', '20261125', 1, 'INCOMING_AT', 42.0, -71.0, 1055, 1055, 1055, false),
+            ('vc', 'TCLAMP', '20261125', 2, 'IN_TRANSIT_TO', 42.01, -71.0, 1060, 1060, 1060, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TCLAMP', stop_sequence: 1, checkpoint_id: 'c1', crossing_method: 'stopped', crossing_ts: 1050.0, before_observation_ts: 1050, uses_clamped_report: true}
+
+  - name: ut_stop_crossings_backward
+    description: >-
+      A stopped report from an earlier visit is ignored after backward sequence.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TBACK', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TBACK', 'V', 'R', 0, 'P', 'scheduled', 2, 'c2', 'c2', 'c2', 42.01, -71.0, false),
+            ('2026-11-25', 'TBACK', 'V', 'R', 0, 'P', 'scheduled', 3, 'c3', 'c3', 'c3', 42.02, -71.0, false),
+            ('2026-11-25', 'TBACK', 'V', 'R', 0, 'P', 'scheduled', 4, 'c4', 'c4', 'c4', 42.03, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vb', 'TBACK', '20261125', 2, 'STOPPED_AT', 42.01, -71.0, 1000, 1000, 1000, false),
+            ('vb', 'TBACK', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1030, 1030, 1030, false),
+            ('vb', 'TBACK', '20261125', 3, 'IN_TRANSIT_TO', 42.02, -71.0, 1090, 1090, 1090, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TBACK', stop_sequence: 2, checkpoint_id: 'c2', vehicle__id: 'vb', vehicle_count: 1, crossing_method: 'interpolated', crossing_ts: 1060.0, before_observation_ts: 1030, after_observation_ts: 1090, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
+
+  - name: ut_stop_crossings_null_stop_coords
+    description: >-
+      A non-timepoint stop with null coordinates is skipped in the polyline.
+    model: int_stop_crossings
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.checkpoint_id::varchar as checkpoint_id,
+            p.stop_lat::double as stop_lat,
+            p.stop_lon::double as stop_lon,
+            p.is_last_stop::boolean as is_last_stop
+          from (values
+            ('2026-11-25', 'TNUL', 'V', 'R', 0, 'P', 'scheduled', 1, 'c1', 'c1', 'c1', 42.0, -71.0, false),
+            ('2026-11-25', 'TNUL', 'V', 'R', 0, 'P', 'scheduled', 2, 'n2', 'n2', null, cast(null as double), cast(null as double), false),
+            ('2026-11-25', 'TNUL', 'V', 'R', 0, 'P', 'scheduled', 3, 'c3', 'c3', 'c3', 42.01, -71.0, false),
+            ('2026-11-25', 'TNUL', 'V', 'R', 0, 'P', 'scheduled', 4, 'c4', 'c4', 'c4', 42.02, -71.0, true)
+          ) as p(service_date, trip_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, stop_sequence, stop_id, station_id, checkpoint_id, stop_lat, stop_lon, is_last_stop)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.vehicle__id::varchar as vehicle__id,
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.current_status::varchar as current_status,
+            v.position__latitude::double as position__latitude,
+            v.position__longitude::double as position__longitude,
+            v.timestamp::bigint as timestamp,
+            v.header_ts::bigint as header_ts,
+            v.observation_ts::bigint as observation_ts,
+            v.observation_time_clamped::boolean as observation_time_clamped
+          from (values
+            ('vn', 'TNUL', '20261125', 1, 'IN_TRANSIT_TO', 42.0, -71.0, 1000, 1000, 1000, false),
+            ('vn', 'TNUL', '20261125', 4, 'IN_TRANSIT_TO', 42.02, -71.0, 1060, 1060, 1060, false)
+          ) as v(vehicle__id, trip__trip_id, trip__start_date, current_stop_sequence, current_status, position__latitude, position__longitude, timestamp, header_ts, observation_ts, observation_time_clamped)
+    expect:
+      rows:
+        - {trip_id: 'TNUL', stop_sequence: 1, checkpoint_id: 'c1', vehicle__id: 'vn', vehicle_count: 1, crossing_method: 'interpolated', crossing_ts: 1000.0, before_observation_ts: 1000, after_observation_ts: 1060, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
+        - {trip_id: 'TNUL', stop_sequence: 3, checkpoint_id: 'c3', vehicle__id: 'vn', vehicle_count: 1, crossing_method: 'interpolated', crossing_ts: 1030.0, before_observation_ts: 1000, after_observation_ts: 1060, crossing_uncertainty_s: 60.0, uses_clamped_report: false}
 
   - name: ut_stop_crossings_terminal
     description: >-
