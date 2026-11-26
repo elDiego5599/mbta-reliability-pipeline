@@ -12,3 +12,14 @@ models:
     staging:
       +schema: staging
       +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+
+vars:
+  poll_interval_s:
+    VehiclePositions: 30
+    TripUpdates: 300
+    Alerts: 60
+  intermediate_route_types: [0, 1, 3]
+  excluded_route_descs: ['Rail Replacement Bus']
