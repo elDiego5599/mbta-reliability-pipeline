@@ -487,9 +487,9 @@ unit_tests:
           ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
     expect:
       rows:
-        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
-        - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: 300}
-        - {alert_id: 'X', version_first_seen_ts: 300, version_last_seen_ts: 300, version_snapshot_count: 1, version_ended_ts: null}
+        - {alert_id: 'X', header_text: 'A', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', header_text: 'B', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: 300}
+        - {alert_id: 'X', header_text: 'A', version_first_seen_ts: 300, version_last_seen_ts: 300, version_snapshot_count: 1, version_ended_ts: null}
   - name: ut_alerts_leave_and_return
     description: >-
       An alert absent from a snapshot that exists and then back with the same content is two versions; the first ends at the snapshot it left.
