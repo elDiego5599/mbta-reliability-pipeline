@@ -72,3 +72,30 @@ models:
           - accepted_values:
               arguments:
                 values: [single_pattern, common_timepoint, primary_only]
+
+  - name: int_trip_paths
+    description: One stop of the path of one observed trip on a service date.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_source
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [scheduled, pattern_match]

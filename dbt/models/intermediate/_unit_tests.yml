@@ -297,3 +297,164 @@ unit_tests:
         - {route_id: 'GAP', direction_id: 1, route_pattern_id: 'P_GAP', stop_id: 'g2', station_id: 'g2', stop_sequence: 2, position: 2, pattern_stop_count: 5, typical_pattern_count: 1, selection: 'single_pattern'}
         - {route_id: 'RED', direction_id: 0, route_pattern_id: 'P_BR', stop_id: 'c1', station_id: 'place-c', stop_sequence: 3, position: 3, pattern_stop_count: 6, typical_pattern_count: 2, selection: 'common_timepoint'}
         - {route_id: 'NOSHARE', direction_id: 0, route_pattern_id: 'P_N1', stop_id: 'n2', station_id: 'n2', stop_sequence: 2, position: 2, pattern_stop_count: 3, typical_pattern_count: 2, selection: 'primary_only'}
+
+  - name: ut_trip_paths
+    description: >-
+      A trip uses its scheduled path or the active-version pattern with the
+      highest matching share, excluding opposite directions and out-of-scope routes.
+    model: int_trip_paths
+    given:
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            v.service_date::date as service_date,
+            v.feed_version::varchar as feed_version
+          from (values
+            ('2026-11-25', 'V')
+          ) as v(service_date, feed_version)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.trip__trip_id::varchar as trip__trip_id,
+            v.trip__start_date::varchar as trip__start_date,
+            v.trip__route_id::varchar as trip__route_id,
+            v.trip__direction_id::integer as trip__direction_id,
+            v.stop_id::varchar as stop_id,
+            v.current_stop_sequence::integer as current_stop_sequence,
+            v.vehicle__id::varchar as vehicle__id
+          from (values
+            ('T_SCHED', '20261125', 'R', 0, 'sa', 1, 'v1'),
+            ('T_SCHED', '20261125', 'R', 1, 'sb', 2, 'v1'),
+            ('T_SCHED', '20261125', null, null, 'sc', 3, 'v1'),
+            ('T_ADD', '20261125', 'R', 0, 'sa', 1, 'v1'),
+            ('T_ADD', '20261125', 'R', 0, 'sb', 2, 'v1'),
+            ('T_ADD', '20261125', 'R', 0, 'sc', 3, 'v1'),
+            ('T_ADD', '20261125', 'R', 0, 'sz', 9, 'v1'),
+            ('T_TIE', '20261125', 'R', 0, 'sa', 1, 'v1'),
+            ('T_TWO', '20261125', 'GA', 0, 'g1', 1, 'v1'),
+            ('T_TWO', '20261125', 'GA', 0, 'g2', 2, 'v1'),
+            ('T_TWO', '20261125', 'GB', 0, 'g3', 3, 'v2'),
+            ('T_LOW', '20261125', 'R', 0, 'sa', 1, 'v1'),
+            ('T_LOW', '20261125', 'R', 0, 'zz', 7, 'v1'),
+            ('T_LOW', '20261125', 'R', 0, 'zq', 8, 'v1'),
+            ('T_CRX', '20261125', 'CR', 0, 'cr1', 1, 'v1'),
+            ('T_NOSTART', null, 'R', 0, 'sa', 1, 'v1')
+          ) as v(trip__trip_id, trip__start_date, trip__route_id, trip__direction_id, stop_id, current_stop_sequence, vehicle__id)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.route_id::varchar as route_id,
+            t.service_id::varchar as service_id,
+            t.trip_id::varchar as trip_id,
+            t.direction_id::integer as direction_id,
+            t.route_pattern_id::varchar as route_pattern_id
+          from (values
+            ('V', 'R', 'WKD', 'T_SCHED', 0, 'P1'),
+            ('V', 'CR', 'WKD', 'T_CRX', 0, 'PCR'),
+            ('V', 'R', 'WKD', 'REP1R', 1, 'P1R'),
+            ('V', 'R', 'WKD', 'REP2', 0, 'P2'),
+            ('V', 'GA', 'WKD', 'REPA', 0, 'PA'),
+            ('V', 'GB', 'WKD', 'REPB', 0, 'PB'),
+            ('OLD', 'R', 'WKD', 'T_ADD', 0, 'P1')
+          ) as t(feed_version, route_id, service_id, trip_id, direction_id, route_pattern_id)
+      - input: ref('stg_static__route_patterns')
+        format: sql
+        rows: |
+          select
+            p.feed_version::varchar as feed_version,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_typicality::integer as route_pattern_typicality,
+            p.route_pattern_sort_order::integer as route_pattern_sort_order,
+            p.representative_trip_id::varchar as representative_trip_id
+          from (values
+            ('V', 'P1', 'R', 0, 1, 200, 'T_SCHED'),
+            ('V', 'P2', 'R', 0, 2, 100, 'REP2'),
+            ('V', 'P1R', 'R', 1, 1, 50, 'REP1R'),
+            ('V', 'PA', 'GA', 0, 1, 1, 'REPA'),
+            ('V', 'PB', 'GB', 0, 1, 2, 'REPB')
+          ) as p(feed_version, route_pattern_id, route_id, direction_id, route_pattern_typicality, route_pattern_sort_order, representative_trip_id)
+      - input: ref('stg_static__stop_times')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.stop_id::varchar as stop_id,
+            s.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('V', 'T_SCHED', 1, 'sa', 'cp_sa'),
+            ('V', 'T_SCHED', 2, 'sb', null),
+            ('V', 'T_SCHED', 3, 'sc', 'cp_sc'),
+            ('V', 'REP2', 1, 'sa', null),
+            ('V', 'REP2', 2, 'sx', null),
+            ('V', 'REP2', 3, 'sy', null),
+            ('V', 'REP1R', 1, 'sa', null),
+            ('V', 'REP1R', 2, 'sb', null),
+            ('V', 'REP1R', 3, 'sc', null),
+            ('V', 'REPA', 1, 'g1', 'cp_g1'),
+            ('V', 'REPA', 2, 'h2', null),
+            ('V', 'REPB', 1, 'g1', 'cp_g1'),
+            ('V', 'REPB', 2, 'g2', null),
+            ('V', 'REPB', 3, 'g3', 'cp_g3'),
+            ('V', 'T_CRX', 1, 'cr1', null),
+            ('V', 'T_CRX', 2, 'cr2', null)
+          ) as s(feed_version, trip_id, stop_sequence, stop_id, checkpoint_id)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.parent_station::varchar as parent_station,
+            s.stop_lat::double as stop_lat,
+            s.stop_lon::double as stop_lon
+          from (values
+            ('V', 'sa', null, 42.1, -71.1),
+            ('V', 'sb', null, 42.2, -71.2),
+            ('V', 'sc', null, 42.3, -71.3),
+            ('V', 'sx', null, 42.4, -71.4),
+            ('V', 'sy', null, 42.5, -71.5),
+            ('V', 'g1', null, 42.6, -71.6),
+            ('V', 'h2', null, 42.7, -71.7),
+            ('V', 'g2', null, 42.8, -71.8),
+            ('V', 'g3', null, 42.9, -71.9),
+            ('V', 'zz', null, 43.0, -72.0),
+            ('V', 'zq', null, 43.1, -72.1),
+            ('V', 'cr1', null, 43.2, -72.2),
+            ('V', 'cr2', null, 43.3, -72.3)
+          ) as s(feed_version, stop_id, parent_station, stop_lat, stop_lon)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_type::integer as route_type,
+            r.route_desc::varchar as route_desc
+          from (values
+            ('V', 'R', 1, 'Rapid Transit'),
+            ('V', 'GA', 0, 'Light Rail'),
+            ('V', 'GB', 0, 'Light Rail'),
+            ('V', 'CR', 2, 'Commuter Rail')
+          ) as r(feed_version, route_id, route_type, route_desc)
+    expect:
+      rows:
+        - {trip_id: 'T_SCHED', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'scheduled', match_share: null, stop_sequence: 1, stop_id: 'sa', checkpoint_id: 'cp_sa', is_last_stop: false}
+        - {trip_id: 'T_SCHED', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'scheduled', match_share: null, stop_sequence: 2, stop_id: 'sb', checkpoint_id: null, is_last_stop: false}
+        - {trip_id: 'T_SCHED', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'scheduled', match_share: null, stop_sequence: 3, stop_id: 'sc', checkpoint_id: 'cp_sc', is_last_stop: true}
+        - {trip_id: 'T_ADD', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 0.75, stop_sequence: 1, stop_id: 'sa', checkpoint_id: 'cp_sa', is_last_stop: false}
+        - {trip_id: 'T_ADD', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 0.75, stop_sequence: 2, stop_id: 'sb', checkpoint_id: null, is_last_stop: false}
+        - {trip_id: 'T_ADD', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 0.75, stop_sequence: 3, stop_id: 'sc', checkpoint_id: 'cp_sc', is_last_stop: true}
+        - {trip_id: 'T_TIE', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 1, stop_id: 'sa', checkpoint_id: 'cp_sa', is_last_stop: false}
+        - {trip_id: 'T_TIE', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 2, stop_id: 'sb', checkpoint_id: null, is_last_stop: false}
+        - {trip_id: 'T_TIE', route_id: 'R', direction_id: 0, route_pattern_id: 'P1', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 3, stop_id: 'sc', checkpoint_id: 'cp_sc', is_last_stop: true}
+        - {trip_id: 'T_TWO', route_id: 'GB', direction_id: 0, route_pattern_id: 'PB', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 1, stop_id: 'g1', checkpoint_id: 'cp_g1', is_last_stop: false}
+        - {trip_id: 'T_TWO', route_id: 'GB', direction_id: 0, route_pattern_id: 'PB', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 2, stop_id: 'g2', checkpoint_id: null, is_last_stop: false}
+        - {trip_id: 'T_TWO', route_id: 'GB', direction_id: 0, route_pattern_id: 'PB', trip_source: 'pattern_match', match_share: 1.0, stop_sequence: 3, stop_id: 'g3', checkpoint_id: 'cp_g3', is_last_stop: true}
