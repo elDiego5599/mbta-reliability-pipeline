@@ -450,6 +450,46 @@ unit_tests:
       rows:
         - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
         - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: null}
+  - name: ut_alerts_content_aba
+    description: >-
+      A A-B-A header_text sequence creates three versions.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'A', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'B', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (300, 'X', 'DELAY', 'WARNING', [{'text': 'A', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: 300}
+        - {alert_id: 'X', version_first_seen_ts: 300, version_last_seen_ts: 300, version_snapshot_count: 1, version_ended_ts: null}
   - name: ut_alerts_leave_and_return
     description: >-
       An alert absent from a snapshot that exists and then back with the same content is two versions; the first ends at the snapshot it left.
@@ -702,3 +742,31 @@ unit_tests:
       rows:
         - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null, trip__direction_id: null, trip__modified_trip__modifications_id: null, trip__modified_trip__affected_trip_id: null, trip__modified_trip__start_time: null, trip__modified_trip__start_date: null}
         - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1, trip__direction_id: 0, trip__modified_trip__modifications_id: 'M1', trip__modified_trip__affected_trip_id: 'T0', trip__modified_trip__start_time: '08:00', trip__modified_trip__start_date: '20261125'}
+  - name: ut_informed_entities_null_list
+    description: >-
+      A null informed_entity list contributes no rows.
+    model: stg_alert_informed_entities
+    given:
+      - input: ref('stg_alerts')
+        format: sql
+        rows: |
+          select 'X' as alert_id, 100::bigint as version_first_seen_ts,
+            null::struct(agency_id varchar, route_id varchar, route_type integer,
+              trip struct(trip_id varchar, route_id varchar, direction_id integer,
+                start_time varchar, start_date varchar, schedule_relationship varchar,
+                modified_trip struct(modifications_id varchar, affected_trip_id varchar,
+                  start_time varchar, start_date varchar)),
+              stop_id varchar, direction_id integer)[] as informed_entity
+          union all
+          select 'X', 200,
+            [{'agency_id': '1', 'route_id': 'Red', 'route_type': 1, 'trip': null,
+              'stop_id': null, 'direction_id': null}]::struct(
+                agency_id varchar, route_id varchar, route_type integer,
+                trip struct(trip_id varchar, route_id varchar, direction_id integer,
+                  start_time varchar, start_date varchar, schedule_relationship varchar,
+                  modified_trip struct(modifications_id varchar, affected_trip_id varchar,
+                    start_time varchar, start_date varchar)),
+                stop_id varchar, direction_id integer)[]
+    expect:
+      rows:
+        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null, trip__direction_id: null, trip__modified_trip__modifications_id: null, trip__modified_trip__affected_trip_id: null, trip__modified_trip__start_time: null, trip__modified_trip__start_date: null}
