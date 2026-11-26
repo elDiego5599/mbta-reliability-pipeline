@@ -56,3 +56,33 @@ must be estimated.
   records the pattern mix.
 - If polling is moved to 15 s later, crossing uncertainty halves and volume
   doubles; the decision does not change.
+
+## Amendment, 2026-11-26
+
+Decision 1 assumed one typical pattern per route and direction. Real data
+has several: the Red Line has two typical patterns per direction
+(Alewife to Braintree and Alewife to Ashmont), and other routes have
+branches too. The measure point is therefore chosen as follows, in
+`int_measure_points`:
+
+- **Primary pattern.** Among the typical patterns, the one with the lowest
+  `route_pattern_sort_order` (then `route_pattern_id`).
+- **Common timepoint by station.** The candidates are the timepoints of the
+  primary pattern whose station (`parent_station`, or the stop itself when
+  it has none) is a timepoint of every typical pattern. Stations are used
+  instead of stop ids because a shared station can use a different platform
+  per branch (JFK/UMass on the Red Line). The measure point is the candidate
+  nearest the middle of the primary pattern by position (stops numbered
+  1..n, since raw stop sequences can skip numbers); on a tie, the lower
+  position. For Red direction 0 this is Downtown Crossing, on the trunk, so
+  both branches are counted.
+- **Primary pattern fallback.** When no timepoint is shared by every
+  typical pattern, every timepoint of the primary pattern is a candidate.
+  The column `selection` records which rule applied (`single_pattern`,
+  `common_timepoint` or `primary_only`).
+- **Matching by station.** Marts match crossings to the measure point by
+  (`route_id`, `direction_id`, `station_id`), so a trip on another branch
+  that passes the same station counts, and a trip whose path does not
+  include that station does not.
+
+The rest of the decision is unchanged.
