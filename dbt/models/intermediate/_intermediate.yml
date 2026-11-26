@@ -46,3 +46,29 @@ models:
         data_tests: [not_null]
       - name: stop_sequence
         data_tests: [not_null]
+
+  - name: int_measure_points
+    description: One measure point per route and direction in one static version.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, route_id, direction_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: route_id
+        data_tests: [not_null]
+      - name: direction_id
+        data_tests: [not_null]
+      - name: stop_id
+        data_tests: [not_null]
+      - name: selection
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [single_pattern, common_timepoint, primary_only]
