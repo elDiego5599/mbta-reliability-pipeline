@@ -20,6 +20,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -50,6 +51,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -82,6 +84,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -112,6 +115,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -143,6 +147,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -176,6 +181,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -207,6 +213,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -240,6 +247,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -273,6 +281,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -306,6 +315,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -634,11 +644,13 @@ unit_tests:
               'stop_id': null, 'direction_id': null},
              {'agency_id': '1', 'route_id': 'Red', 'route_type': 1,
               'trip': {'trip_id': 'T1', 'route_id': 'Red', 'direction_id': 0, 'start_time': null,
-                       'start_date': '20261125', 'schedule_relationship': null, 'modified_trip': null},
-              'stop_id': 'place-sstat', 'direction_id': 1}]::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity
+                       'start_date': '20261125', 'schedule_relationship': null,
+                       'modified_trip': {'modifications_id': 'M1', 'affected_trip_id': 'T0',
+                                         'start_time': '08:00', 'start_date': '20261125'}},
+              'stop_id': 'place-sstat', 'direction_id': 1}]::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id integer, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id integer)[] as informed_entity
           union all
-          select 'Y', 100, []::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[]
+          select 'Y', 100, []::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id integer, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id integer)[]
     expect:
       rows:
-        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null}
-        - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1}
+        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null, trip__direction_id: null, trip__modified_trip__modifications_id: null, trip__modified_trip__affected_trip_id: null, trip__modified_trip__start_time: null, trip__modified_trip__start_date: null}
+        - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1, trip__direction_id: 0, trip__modified_trip__modifications_id: 'M1', trip__modified_trip__affected_trip_id: 'T0', trip__modified_trip__start_time: '08:00', trip__modified_trip__start_date: '20261125'}

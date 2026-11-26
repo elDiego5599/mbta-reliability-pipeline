@@ -65,7 +65,15 @@ observed as (
 )
 
 select
-    *,
+    * replace (
+        cast(multi_carriage_details as struct(
+            id varchar,
+            "label" varchar,
+            occupancy_status varchar,
+            occupancy_percentage integer,
+            carriage_sequence integer
+        )[]) as multi_carriage_details
+    ),
     own_observation_ts < observation_ts as observation_time_clamped,
     header_ts - timestamp as report_age_s,
     cast(make_timestamp(header_ts * 1000000) as date) as snapshot_date

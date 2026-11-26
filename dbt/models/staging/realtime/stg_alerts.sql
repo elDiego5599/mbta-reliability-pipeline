@@ -67,22 +67,53 @@ versions as (
         arg_max_null(active_period, snapshot_idx) as last_active_period
     from numbered
     group by alert_id, version_no
+),
+expanded as (
+    select
+        alert_id,
+        unnest(content),
+        first_active_period,
+        last_active_period,
+        coalesce(
+            list_filter(content.header_text__translation, lambda t: t.language = 'en')[1].text,
+            content.header_text__translation[1].text
+        ) as header_text,
+        coalesce(
+            list_filter(content.description_text__translation, lambda t: t.language = 'en')[1].text,
+            content.description_text__translation[1].text
+        ) as description_text,
+        version_first_seen_ts,
+        version_last_seen_ts,
+        version_snapshot_count,
+        version_ended_ts
+    from versions
 )
 select
-    alert_id,
-    unnest(content),
-    first_active_period,
-    last_active_period,
-    coalesce(
-        list_filter(content.header_text__translation, lambda t: t.language = 'en')[1].text,
-        content.header_text__translation[1].text
-    ) as header_text,
-    coalesce(
-        list_filter(content.description_text__translation, lambda t: t.language = 'en')[1].text,
-        content.description_text__translation[1].text
-    ) as description_text,
-    version_first_seen_ts,
-    version_last_seen_ts,
-    version_snapshot_count,
-    version_ended_ts
-from versions
+    * replace (
+        cast(communication_period as struct("start" bigint, "end" bigint)[]) as communication_period,
+        cast(impact_period as struct("start" bigint, "end" bigint)[]) as impact_period,
+        cast(informed_entity as struct(
+            agency_id varchar,
+            route_id varchar,
+            route_type integer,
+            trip struct(
+                trip_id varchar,
+                route_id varchar,
+                direction_id integer,
+                start_time varchar,
+                start_date varchar,
+                schedule_relationship varchar,
+                modified_trip struct(
+                    modifications_id varchar,
+                    affected_trip_id varchar,
+                    start_time varchar,
+                    start_date varchar
+                )
+            ),
+            stop_id varchar,
+            direction_id integer
+        )[]) as informed_entity,
+        cast(first_active_period as struct("start" bigint, "end" bigint)[]) as first_active_period,
+        cast(last_active_period as struct("start" bigint, "end" bigint)[]) as last_active_period
+    )
+from expanded
