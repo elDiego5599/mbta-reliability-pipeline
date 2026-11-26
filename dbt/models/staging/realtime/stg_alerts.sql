@@ -3,7 +3,7 @@
 {{ config(materialized='table') }}
 
 with source as (
-    -- A snapshot repeated in two hour files would otherwise count twice.
+    -- The distinct is only a guard against duplicate silver rows.
     select distinct * exclude (date, filename)
     from {{ source('silver', 'alerts') }}
 ),
