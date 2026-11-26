@@ -35,3 +35,137 @@ unit_tests:
           ('2026-11-27', 'A', 'seen_before_day', 1),
           ('2026-11-30', 'C', 'earliest_covering', 1)
         ) as v(service_date, feed_version, selection, candidate_count)
+
+  - name: ut_scheduled_stop_times
+    description: >-
+      Scheduled checkpoint stop times are expanded across active static
+      service dates, including weekday removals, Sunday service, additions,
+      DST, and routes whose description is null.
+    model: int_scheduled_stop_times
+    given:
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            v.service_date::date as service_date,
+            v.feed_version::varchar as feed_version
+          from (values
+            ('2026-10-30', 'V'),
+            ('2026-10-31', 'V'),
+            ('2026-11-01', 'V'),
+            ('2026-11-02', 'V')
+          ) as v(service_date, feed_version)
+      - input: ref('stg_vehicle_positions')
+        format: sql
+        rows: |
+          select
+            v.trip__start_date::varchar as trip__start_date
+          from (values
+            ('20261030'),
+            ('20261102')
+          ) as v(trip__start_date)
+      - input: ref('stg_static__calendar')
+        format: sql
+        rows: |
+          select
+            c.feed_version::varchar as feed_version,
+            c.service_id::varchar as service_id,
+            c.monday::boolean as monday,
+            c.tuesday::boolean as tuesday,
+            c.wednesday::boolean as wednesday,
+            c.thursday::boolean as thursday,
+            c.friday::boolean as friday,
+            c.saturday::boolean as saturday,
+            c.sunday::boolean as sunday,
+            c.start_date::date as start_date,
+            c.end_date::date as end_date
+          from (values
+            ('V', 'WKD', true, true, true, true, true, false, false, '2026-10-01', '2026-12-31'),
+            ('V', 'SUN', false, false, false, false, false, false, true, '2026-10-01', '2026-12-31')
+          ) as c(feed_version, service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date)
+      - input: ref('stg_static__calendar_dates')
+        format: sql
+        rows: |
+          select
+            c.feed_version::varchar as feed_version,
+            c.service_id::varchar as service_id,
+            c.date::date as date,
+            c.exception_type::integer as exception_type
+          from (values
+            ('V', 'WKD', '2026-11-02', 2),
+            ('V', 'SPC', '2026-11-01', 1)
+          ) as c(feed_version, service_id, date, exception_type)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.route_id::varchar as route_id,
+            t.service_id::varchar as service_id,
+            t.trip_id::varchar as trip_id,
+            t.direction_id::integer as direction_id,
+            t.route_pattern_id::varchar as route_pattern_id
+          from (values
+            ('V', 'R1', 'WKD', 'T_WKD', 0, 'P'),
+            ('V', 'R1', 'SUN', 'T_SUN', 0, 'P'),
+            ('V', 'R1', 'SPC', 'T_SPC', 0, 'P'),
+            ('V', 'R0', 'SUN', 'T_NULLDESC', 0, 'P'),
+            ('V', 'CR', 'SUN', 'T_CR', 0, 'P'),
+            ('V', 'SH', 'SUN', 'T_SHUT', 0, 'P')
+          ) as t(feed_version, route_id, service_id, trip_id, direction_id, route_pattern_id)
+      - input: ref('stg_static__stop_times')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.stop_id::varchar as stop_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.arrival_time_s::integer as arrival_time_s,
+            s.departure_time_s::integer as departure_time_s
+          from (values
+            ('V', 'T_WKD', 1, 's1', 'cp1', 28800, 28800),
+            ('V', 'T_WKD', 2, 's2', null, 28920, 28920),
+            ('V', 'T_SUN', 1, 's1', 'cp1', 90600, 90600),
+            ('V', 'T_SUN', 2, 's2', null, 90720, 90720),
+            ('V', 'T_SPC', 1, 's1', 'cp1', 36000, 36000),
+            ('V', 'T_SPC', 2, 's2', null, 36120, 36120),
+            ('V', 'T_NULLDESC', 1, 's1', 'cp1', 21600, 21600),
+            ('V', 'T_NULLDESC', 2, 's2', null, 21720, 21720),
+            ('V', 'T_CR', 1, 's1', 'cp1', 30000, 30000),
+            ('V', 'T_CR', 2, 's2', null, 30120, 30120),
+            ('V', 'T_SHUT', 1, 's1', 'cp1', 30000, 30000),
+            ('V', 'T_SHUT', 2, 's2', null, 30120, 30120)
+          ) as s(feed_version, trip_id, stop_sequence, stop_id, checkpoint_id, arrival_time_s, departure_time_s)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.parent_station::varchar as parent_station
+          from (values
+            ('V', 's1', 'place-a'),
+            ('V', 's2', null)
+          ) as s(feed_version, stop_id, parent_station)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_type::integer as route_type,
+            r.route_desc::varchar as route_desc
+          from (values
+            ('V', 'R1', 3, 'Local Bus'),
+            ('V', 'R0', 1, null),
+            ('V', 'CR', 2, null),
+            ('V', 'SH', 3, 'Rail Replacement Bus')
+          ) as r(feed_version, route_id, route_type, route_desc)
+    expect:
+      rows:
+        - {service_date: '2026-10-30', trip_id: 'T_WKD', stop_sequence: 1, station_id: 'place-a', checkpoint_id: 'cp1', scheduled_arrival_ts: 1793361600, scheduled_departure_ts: 1793361600}
+        - {service_date: '2026-11-01', trip_id: 'T_SUN', stop_sequence: 1, station_id: 'place-a', checkpoint_id: 'cp1', scheduled_arrival_ts: 1793599800, scheduled_departure_ts: 1793599800}
+        - {service_date: '2026-11-01', trip_id: 'T_SPC', stop_sequence: 1, station_id: 'place-a', checkpoint_id: 'cp1', scheduled_arrival_ts: 1793545200, scheduled_departure_ts: 1793545200}
+        - {service_date: '2026-11-01', trip_id: 'T_NULLDESC', stop_sequence: 1, station_id: 'place-a', checkpoint_id: 'cp1', scheduled_arrival_ts: 1793530800, scheduled_departure_ts: 1793530800}

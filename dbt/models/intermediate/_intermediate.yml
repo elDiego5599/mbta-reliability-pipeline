@@ -25,3 +25,24 @@ models:
                 values: [seen_before_day, earliest_covering]
       - name: candidate_count
         data_tests: [not_null]
+
+  - name: int_scheduled_stop_times
+    description: One scheduled timepoint stop time on a service date.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
