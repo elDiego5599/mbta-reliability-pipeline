@@ -105,7 +105,8 @@ Other facts from the same two hours:
 Snapshot staleness (spec 4.3) is flagged per feed, not per vehicle. Some
 vehicles keep the same `timestamp` for hours while they stay in the feed.
 Whether staging or the crossing models should drop, cap or only flag such
-reports, and at what age, is decided during phase 2.
+reports, and at what age, is decided during phase 2. Answered in the
+amendment of 2026-11-26.
 
 ## Amendment, 2026-11-25
 
@@ -118,3 +119,13 @@ other model use the same columns. Staging gains three columns:
 is otherwise unchanged; this section records the move. The observation time
 wording was corrected on 2026-11-25 after review: a later version that changes
 only other fields keeps the own time of the version before it.
+
+## Amendment, 2026-11-26
+
+The open question is answered: reports with a frozen `timestamp` are kept,
+in staging and in the crossing models, and are neither dropped nor capped.
+On the real data they are rare (16 rows with `report_age_s` above 15
+minutes in four hours, from 3 vehicles). They stay visible through
+`report_age_s` in `stg_vehicle_positions` and through
+`crossing_uncertainty_s`, which grows with the gap between the reports that
+bracket a crossing. Marts may filter on either column later.

@@ -1,0 +1,161 @@
+version: 2
+
+models:
+  - name: int_static_active_version
+    description: One row per service date with the static version active at the start of that service day.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: selection
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [seen_before_day, earliest_covering]
+      - name: candidate_count
+        data_tests: [not_null]
+
+  - name: int_scheduled_stop_times
+    description: One scheduled timepoint stop time on a service date.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+
+  - name: int_measure_points
+    description: One measure point per route and direction in one static version.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, route_id, direction_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: route_id
+        data_tests: [not_null]
+      - name: direction_id
+        data_tests: [not_null]
+      - name: stop_id
+        data_tests: [not_null]
+      - name: selection
+        description: How the measure point was chosen (single_pattern, common_timepoint, primary_only).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [single_pattern, common_timepoint, primary_only]
+
+  - name: int_trip_paths
+    description: One stop of the path of one observed trip on a service date.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: trip_source
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [scheduled, pattern_match]
+
+  - name: int_stop_crossings
+    description: One crossing of a checkpoint stop for an observed trip on a service date.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: crossing_ts
+        description: Epoch seconds at which the vehicle crossed the stop.
+        data_tests: [not_null]
+      - name: crossing_uncertainty_s
+        description: >-
+          Seconds between the two reports that bound the crossing, plus poller
+          lateness. Not capped (ADR 0009 amendment); marts filter on it.
+        data_tests: [not_null]
+      - name: uses_clamped_report
+        description: True when either bounding report has observation_time_clamped.
+      - name: crossing_method
+        description: How crossing_ts was found (stopped, interpolated, terminal_arrival).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [stopped, interpolated, terminal_arrival]
+      - name: trip_source
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [scheduled, pattern_match]
+
+  - name: int_feed_coverage
+    description: One feed and UTC minute of poll coverage.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed, minute_ts]
+    columns:
+      - name: feed
+        data_tests: [not_null]
+      - name: minute_ts
+        data_tests: [not_null]
+      - name: coverage
+        data_tests: [not_null]

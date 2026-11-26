@@ -235,6 +235,31 @@ observation time taken from `header_ts` is late by at most one poller
 interval (about 30 s, 60 s when a snapshot is missing), and that interval is
 added to `crossing_uncertainty_s`.
 
+Amended 2026-11-26 for the intermediate models (design
+`docs/superpowers/specs/2026-11-25-dbt-intermediate-design.md`):
+
+- **Timepoints only.** `int_stop_crossings` records crossings only at
+  timepoints (stops with a `checkpoint_id`) of the trip's path. Headways are
+  measured at timepoints (ADR 0005), so other stops are not needed.
+- **Trips without a schedule.** A trip with no static stop times (for
+  example an ADDED trip) takes the path of the route pattern, among those
+  of the routes and direction it reported, that best matches its reported
+  (`stop_id`, `current_stop_sequence`) pairs; a tie goes to the more
+  typical pattern. It has no path, and so no crossings, when fewer than
+  half of its pairs match.
+- **Last stop.** No report is ever past the last stop of a path, so its
+  crossing is the first `STOPPED_AT` report there (the arrival), with the
+  report before it as the other end of the interval. Without such a report,
+  or without an earlier report for the vehicle and trip, there is no
+  crossing.
+- **Lateness.** The lateness added to `crossing_uncertainty_s` is measured:
+  `header_ts` minus the previous distinct `header_ts` in
+  `stg_vehicle_positions`, and only for a report whose observation time was
+  taken from `header_ts`. Otherwise it is 0.
+- **One crossing per trip and stop.** When several vehicles cross the same
+  stop of the same trip, the earliest crossing is kept (then the lowest
+  `vehicle__id`), and `vehicle_count` records how many vehicles crossed.
+
 ### 6.3 Tests
 
 - Generic: `unique` and `not_null` on every grain key, `relationships` from
