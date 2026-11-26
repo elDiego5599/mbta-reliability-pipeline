@@ -231,6 +231,7 @@ unit_tests:
             ('V', 'T_BR', 4, 'd1', 'cp_d1'),
             ('V', 'T_BR', 5, 'e9', 'cp_e9'),
             ('V', 'T_BR', 6, 'f1', 'cp_f1'),
+            ('V', 'T_BR', 7, 'j1', 'cp_j1'),
             ('V', 'T_AS', 1, 'a1', 'cp_a1'),
             ('V', 'T_AS', 2, 'b1', 'cp_b1'),
             ('V', 'T_AS', 3, 'c2', 'cp_c2'),
@@ -265,7 +266,7 @@ unit_tests:
             ('V', 'g4', null), ('V', 'g5', null),
             ('V', 'a1', null), ('V', 'b1', null), ('V', 'c1', 'place-c'),
             ('V', 'c2', 'place-c'), ('V', 'd1', null), ('V', 'e9', null),
-            ('V', 'f1', null), ('V', 'h1', null), ('V', 'i1', null),
+            ('V', 'f1', null), ('V', 'j1', null), ('V', 'h1', null), ('V', 'i1', null),
             ('V', 'n1', null), ('V', 'n2', null), ('V', 'n3', null),
             ('V', 'm1', null), ('V', 'm2', null),
             ('V', 'sh1', null), ('V', 'sh2', null), ('V', 'sh3', null),
@@ -295,7 +296,7 @@ unit_tests:
         - {route_id: 'ODD', direction_id: 0, route_pattern_id: 'P_ODD', stop_id: 'o3', station_id: 'o3', stop_sequence: 30, position: 3, pattern_stop_count: 5, typical_pattern_count: 1, selection: 'single_pattern'}
         - {route_id: 'EVEN', direction_id: 0, route_pattern_id: 'P_EVEN', stop_id: 'e2', station_id: 'e2', stop_sequence: 2, position: 2, pattern_stop_count: 4, typical_pattern_count: 1, selection: 'single_pattern'}
         - {route_id: 'GAP', direction_id: 1, route_pattern_id: 'P_GAP', stop_id: 'g2', station_id: 'g2', stop_sequence: 2, position: 2, pattern_stop_count: 5, typical_pattern_count: 1, selection: 'single_pattern'}
-        - {route_id: 'RED', direction_id: 0, route_pattern_id: 'P_BR', stop_id: 'c1', station_id: 'place-c', stop_sequence: 3, position: 3, pattern_stop_count: 6, typical_pattern_count: 2, selection: 'common_timepoint'}
+        - {route_id: 'RED', direction_id: 0, route_pattern_id: 'P_BR', stop_id: 'c1', station_id: 'place-c', stop_sequence: 3, position: 3, pattern_stop_count: 7, typical_pattern_count: 2, selection: 'common_timepoint'}
         - {route_id: 'NOSHARE', direction_id: 0, route_pattern_id: 'P_N1', stop_id: 'n2', station_id: 'n2', stop_sequence: 2, position: 2, pattern_stop_count: 3, typical_pattern_count: 2, selection: 'primary_only'}
 
   - name: ut_trip_paths

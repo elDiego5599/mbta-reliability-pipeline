@@ -68,7 +68,9 @@ models:
       - name: stop_id
         data_tests: [not_null]
       - name: selection
+        description: How the measure point was chosen (single_pattern, common_timepoint, primary_only).
         data_tests:
+          - not_null
           - accepted_values:
               arguments:
                 values: [single_pattern, common_timepoint, primary_only]
@@ -121,9 +123,19 @@ models:
                 to: ref('stg_static__versions')
                 field: feed_version
       - name: crossing_ts
+        description: Epoch seconds at which the vehicle crossed the stop.
         data_tests: [not_null]
+      - name: crossing_uncertainty_s
+        description: >-
+          Seconds between the two reports that bound the crossing, plus poller
+          lateness. Not capped (ADR 0009 amendment); marts filter on it.
+        data_tests: [not_null]
+      - name: uses_clamped_report
+        description: True when either bounding report has observation_time_clamped.
       - name: crossing_method
+        description: How crossing_ts was found (stopped, interpolated, terminal_arrival).
         data_tests:
+          - not_null
           - accepted_values:
               arguments:
                 values: [stopped, interpolated, terminal_arrival]

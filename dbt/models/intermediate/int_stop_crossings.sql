@@ -52,6 +52,9 @@ header_lateness as (
 reports_with_lateness as (
     select
         reports.*,
+        -- Lateness applies when the row's own header_ts gave its time. A
+        -- clamped row that inherits an earlier header time gets 0 here; it is
+        -- flagged through uses_clamped_report instead.
         case
             when reports.observation_ts = reports.header_ts
               and reports.header_ts <> reports.timestamp
@@ -428,10 +431,14 @@ candidates as (
                     bounded_values.after_lateness_s
                 )
         end as crossing_uncertainty_s,
-        bounded_values.before_clamped
-            or bounded_values.after_clamped
-            or coalesce(bounded_values.stopped_clamped, false)
-            as uses_clamped_report
+        -- Only the two reports that bound the interval count: for a stopped
+        -- crossing the STOPPED_AT report replaces before.
+        case
+            when bounded_values.terminal_arrival
+                then bounded_values.before_clamped or bounded_values.after_clamped
+            else coalesce(bounded_values.stopped_clamped, bounded_values.before_clamped)
+                or bounded_values.after_clamped
+        end as uses_clamped_report
     from bounded_values
 ),
 

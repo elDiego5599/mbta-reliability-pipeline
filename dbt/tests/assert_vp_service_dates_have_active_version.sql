@@ -1,5 +1,7 @@
--- Warn when an in-scope vehicle-position service date has no active static
--- version.
+-- Warn when a vehicle-position service date has no active static version at
+-- all. A route counts as in scope when it is in scope in any static version;
+-- whether the active version holds the route is not checked here (such trips
+-- simply get no path in int_trip_paths).
 {{ config(severity = 'warn') }}
 
 with vp_dates as (
