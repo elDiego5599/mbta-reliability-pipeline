@@ -79,7 +79,8 @@ brackets as (
         vehicles.vehicle__id,
         after_report.rn as after_rn,
         before_report.rn as before_rn,
-        stopped_report.rn as stopped_rn
+        stopped_report.rn as stopped_rn,
+        false as terminal_arrival
     from {{ ref('int_trip_paths') }} as paths
     inner join vehicles
         on vehicles.service_date = paths.service_date
@@ -113,9 +114,46 @@ brackets as (
     ) as stopped_report
     where after_report.rn is not null
       and before_report.rn is not null
+      and paths.is_last_stop = false
 ),
 
-crossing_reports as (
+terminal_brackets as (
+    select
+        paths.service_date,
+        paths.trip_id,
+        paths.stop_sequence,
+        vehicles.vehicle__id,
+        null::bigint as after_rn,
+        before_report.rn as before_rn,
+        stopped_report.rn as stopped_rn,
+        true as terminal_arrival
+    from {{ ref('int_trip_paths') }} as paths
+    inner join vehicles
+        on vehicles.service_date = paths.service_date
+        and vehicles.trip_id = paths.trip_id
+    cross join lateral (
+        select min(rn) as rn
+        from reports_with_lateness
+        where service_date = paths.service_date
+          and trip_id = paths.trip_id
+          and vehicle__id = vehicles.vehicle__id
+          and current_stop_sequence = paths.stop_sequence
+          and current_status = 'STOPPED_AT'
+    ) as stopped_report
+    cross join lateral (
+        select max(rn) as rn
+        from reports_with_lateness
+        where service_date = paths.service_date
+          and trip_id = paths.trip_id
+          and vehicle__id = vehicles.vehicle__id
+          and rn < stopped_report.rn
+    ) as before_report
+    where paths.is_last_stop = true
+      and stopped_report.rn is not null
+      and before_report.rn is not null
+),
+
+crossing_reports_normal as (
     select
         brackets.*,
         base_before.position__latitude as before_lat,
@@ -149,6 +187,43 @@ crossing_reports as (
         and stopped_report.trip_id = brackets.trip_id
         and stopped_report.vehicle__id = brackets.vehicle__id
         and stopped_report.rn = brackets.stopped_rn
+),
+
+terminal_crossing_reports as (
+    select
+        terminal_brackets.*,
+        base_before.position__latitude as before_lat,
+        base_before.position__longitude as before_lon,
+        base_before.current_stop_sequence as before_seq,
+        base_before.observation_ts as before_observation_ts,
+        base_before.lateness_s as before_lateness_s,
+        base_before.observation_time_clamped as before_clamped,
+        stopped_report.position__latitude as after_lat,
+        stopped_report.position__longitude as after_lon,
+        stopped_report.current_stop_sequence as after_seq,
+        stopped_report.observation_ts as after_observation_ts,
+        stopped_report.lateness_s as after_lateness_s,
+        stopped_report.observation_time_clamped as after_clamped,
+        stopped_report.observation_ts as stopped_observation_ts,
+        stopped_report.lateness_s as stopped_lateness_s,
+        stopped_report.observation_time_clamped as stopped_clamped
+    from terminal_brackets
+    inner join reports_with_lateness as base_before
+        on base_before.service_date = terminal_brackets.service_date
+        and base_before.trip_id = terminal_brackets.trip_id
+        and base_before.vehicle__id = terminal_brackets.vehicle__id
+        and base_before.rn = terminal_brackets.before_rn
+    inner join reports_with_lateness as stopped_report
+        on stopped_report.service_date = terminal_brackets.service_date
+        and stopped_report.trip_id = terminal_brackets.trip_id
+        and stopped_report.vehicle__id = terminal_brackets.vehicle__id
+        and stopped_report.rn = terminal_brackets.stopped_rn
+),
+
+crossing_reports as (
+    select * from crossing_reports_normal
+    union all
+    select * from terminal_crossing_reports
 ),
 
 path_edges as (
@@ -229,7 +304,8 @@ path_bounds as (
         crossing_reports.after_clamped,
         crossing_reports.stopped_observation_ts,
         crossing_reports.stopped_lateness_s,
-        crossing_reports.stopped_clamped
+        crossing_reports.stopped_clamped,
+        crossing_reports.terminal_arrival
 ),
 
 bounded_values as (
@@ -272,10 +348,13 @@ candidates as (
         bounded_values.stop_sequence,
         bounded_values.vehicle__id,
         case
+            when bounded_values.terminal_arrival then 'terminal_arrival'
             when bounded_values.stopped_rn is not null then 'stopped'
             else 'interpolated'
         end as crossing_method,
         case
+            when bounded_values.terminal_arrival
+                then bounded_values.stopped_observation_ts
             when bounded_values.stopped_rn is not null
                 then bounded_values.stopped_observation_ts
             else round(
@@ -315,23 +394,40 @@ candidates as (
                 3
             )
         end as crossing_ts,
-        coalesce(
-            bounded_values.stopped_observation_ts,
-            bounded_values.before_observation_ts
-        ) as before_observation_ts,
-        bounded_values.after_observation_ts,
-        (bounded_values.after_observation_ts
-            - coalesce(
+        case
+            when bounded_values.terminal_arrival
+                then bounded_values.before_observation_ts
+            else coalesce(
                 bounded_values.stopped_observation_ts,
                 bounded_values.before_observation_ts
-            ))
-            + greatest(
-                coalesce(
-                    bounded_values.stopped_lateness_s,
-                    bounded_values.before_lateness_s
-                ),
-                bounded_values.after_lateness_s
-            ) as crossing_uncertainty_s,
+            )
+        end as before_observation_ts,
+        case
+            when bounded_values.terminal_arrival
+                then bounded_values.stopped_observation_ts
+            else bounded_values.after_observation_ts
+        end as after_observation_ts,
+        case
+            when bounded_values.terminal_arrival
+                then (bounded_values.stopped_observation_ts
+                    - bounded_values.before_observation_ts)
+                    + greatest(
+                        bounded_values.before_lateness_s,
+                        bounded_values.stopped_lateness_s
+                    )
+            else (bounded_values.after_observation_ts
+                - coalesce(
+                    bounded_values.stopped_observation_ts,
+                    bounded_values.before_observation_ts
+                ))
+                + greatest(
+                    coalesce(
+                        bounded_values.stopped_lateness_s,
+                        bounded_values.before_lateness_s
+                    ),
+                    bounded_values.after_lateness_s
+                )
+        end as crossing_uncertainty_s,
         bounded_values.before_clamped
             or bounded_values.after_clamped
             or coalesce(bounded_values.stopped_clamped, false)
