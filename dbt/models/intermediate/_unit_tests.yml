@@ -1,0 +1,37 @@
+version: 2
+
+unit_tests:
+  - name: ut_active_version
+    description: >-
+      A version is active from the day it was first seen before 03:00 America/New_York; when no candidate was seen before the day, the earliest covering version is used.
+    model: int_static_active_version
+    given:
+      - input: ref('stg_static__versions')
+        format: sql
+        rows: |
+          select
+            v.feed_version::varchar as feed_version,
+            v.feed_start_date::date as feed_start_date,
+            v.feed_end_date::date as feed_end_date,
+            v.first_seen_at::timestamptz as first_seen_at
+          from (values
+            ('A', '2026-11-23', '2026-11-27', '2026-11-24 02:26:00+00'),
+            ('B', '2026-11-24', '2026-11-26', '2026-11-25 16:30:00+00'),
+            ('C', '2026-11-30', '2026-11-30', '2026-11-30 08:00:00+00')
+          ) as v(feed_version, feed_start_date, feed_end_date, first_seen_at)
+    expect:
+      format: sql
+      rows: |
+        select
+          v.service_date::date as service_date,
+          v.feed_version::varchar as feed_version,
+          v.selection::varchar as selection,
+          v.candidate_count::bigint as candidate_count
+        from (values
+          ('2026-11-23', 'A', 'earliest_covering', 1),
+          ('2026-11-24', 'A', 'seen_before_day', 2),
+          ('2026-11-25', 'A', 'seen_before_day', 2),
+          ('2026-11-26', 'B', 'seen_before_day', 2),
+          ('2026-11-27', 'A', 'seen_before_day', 1),
+          ('2026-11-30', 'C', 'earliest_covering', 1)
+        ) as v(service_date, feed_version, selection, candidate_count)

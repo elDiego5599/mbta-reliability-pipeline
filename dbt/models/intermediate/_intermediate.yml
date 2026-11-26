@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: int_static_active_version
+    description: One row per service date with the static version active at the start of that service day.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: selection
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [seen_before_day, earliest_covering]
+      - name: candidate_count
+        data_tests: [not_null]
