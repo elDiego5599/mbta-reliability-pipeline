@@ -36,5 +36,6 @@ select
     trip_properties__shape_id,
     trip_properties__trip_headsign,
     trip_properties__trip_short_name,
-    date as snapshot_date
+    date as snapshot_date,
+    filename
 from {{ source('silver', 'trip_updates') }}

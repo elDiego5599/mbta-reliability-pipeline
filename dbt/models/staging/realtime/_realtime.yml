@@ -13,6 +13,8 @@ models:
     columns:
       - name: header_ts
         data_tests: [not_null]
+      - name: filename
+        description: Silver hour file that holds the snapshot; filter on it to read one hour only.
       - name: trip__trip_id
         data_tests: [not_null]
       - name: trip__schedule_relationship

@@ -152,6 +152,50 @@ models:
         data_tests: [not_null]
 
 unit_tests:
+  - name: ut_calendar_flags
+    model: stg_static__calendar
+    given:
+      - input: source('static', 'calendar')
+        format: sql
+        rows: |
+          select
+            '11ed7da21c1b'::varchar as feed_version,
+            'weekday'::varchar as service_id,
+            '1'::varchar as monday,
+            '1'::varchar as tuesday,
+            '1'::varchar as wednesday,
+            '1'::varchar as thursday,
+            '1'::varchar as friday,
+            '0'::varchar as saturday,
+            '0'::varchar as sunday,
+            '20240101'::varchar as start_date,
+            '20241231'::varchar as end_date
+          union all
+          select '11ed7da21c1b'::varchar, 'weekend'::varchar,
+            '0'::varchar, '0'::varchar, '0'::varchar, '0'::varchar, '0'::varchar,
+            '1'::varchar, '1'::varchar,
+            '20240601'::varchar, '20240630'::varchar
+    expect:
+      format: sql
+      rows: |
+        select
+          '11ed7da21c1b'::varchar as feed_version,
+          'weekday'::varchar as service_id,
+          true as monday,
+          true as tuesday,
+          true as wednesday,
+          true as thursday,
+          true as friday,
+          false as saturday,
+          false as sunday,
+          '2024-01-01'::date as start_date,
+          '2024-12-31'::date as end_date
+        union all
+        select '11ed7da21c1b'::varchar, 'weekend'::varchar,
+          false, false, false, false, false,
+          true, true,
+          '2024-06-01'::date, '2024-06-30'::date
+
   - name: ut_stop_times_seconds
     model: stg_static__stop_times
     given:

@@ -23,3 +23,42 @@ models:
       - unique_combination:
           arguments:
             columns: [feed, attempt_at, attempt]
+
+unit_tests:
+  - name: ut_fetch_log_columns
+    description: >-
+      The fetch log staging model exposes every source column and snapshot date.
+    model: stg_fetch_log
+    given:
+      - input: source('ops', 'fetch_log')
+        format: sql
+        rows: |
+          select
+            'VehiclePositions'::varchar as feed,
+            1::bigint as attempt,
+            1770000000::double as attempt_at,
+            200::bigint as status,
+            1024::bigint as bytes,
+            25::bigint as latency_ms,
+            null::varchar as error,
+            1770000000::bigint as header_ts,
+            false::boolean as stale,
+            'written'::varchar as outcome,
+            date '2026-11-25' as date
+          union all
+          select
+            'Alerts'::varchar,
+            2::bigint,
+            1770000060::double,
+            500::bigint,
+            0::bigint,
+            100::bigint,
+            'timeout'::varchar,
+            null::bigint,
+            true::boolean,
+            'failed'::varchar,
+            date '2026-11-25'
+    expect:
+      rows:
+        - {feed: VehiclePositions, attempt: 1, attempt_at: 1770000000.0, status: 200, bytes: 1024, latency_ms: 25, error: null, header_ts: 1770000000, stale: false, outcome: written, snapshot_date: '2026-11-25'}
+        - {feed: Alerts, attempt: 2, attempt_at: 1770000060.0, status: 500, bytes: 0, latency_ms: 100, error: timeout, header_ts: null, stale: true, outcome: failed, snapshot_date: '2026-11-25'}

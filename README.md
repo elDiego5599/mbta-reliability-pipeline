@@ -37,7 +37,8 @@ see [Operations](docs/operations.md).
 
 `make dbt-build` builds and tests the dbt models in `dbt/` against `data/`
 into `data/warehouse.duckdb`. Set `MBTA_DATA_DIR` and `MBTA_WAREHOUSE` to
-read or write elsewhere.
+read or write elsewhere. Running dbt directly needs an absolute
+`MBTA_DATA_DIR`; otherwise the views only work from `dbt/`.
 
 ## Stack
 

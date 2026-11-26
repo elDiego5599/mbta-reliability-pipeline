@@ -1,6 +1,54 @@
 version: 2
 
 unit_tests:
+  - name: ut_trip_updates_columns
+    description: >-
+      The trip update staging model exposes the source filename for hour pruning.
+    model: stg_trip_updates
+    given:
+      - input: source('silver', 'trip_updates')
+        format: sql
+        rows: |
+          select
+            header_ts::bigint as header_ts,
+            entity_id::varchar as entity_id,
+            is_deleted::boolean as is_deleted,
+            trip__trip_id::varchar as trip__trip_id,
+            trip__route_id::varchar as trip__route_id,
+            trip__direction_id::uinteger as trip__direction_id,
+            trip__start_time::varchar as trip__start_time,
+            trip__start_date::varchar as trip__start_date,
+            trip__schedule_relationship::varchar as trip__schedule_relationship,
+            null::varchar as trip__modified_trip,
+            vehicle__id::varchar as vehicle__id,
+            vehicle__label::varchar as vehicle__label,
+            vehicle__license_plate::varchar as vehicle__license_plate,
+            vehicle__wheelchair_accessible::varchar as vehicle__wheelchair_accessible,
+            stop_time_update__stop_sequence::uinteger as stop_time_update__stop_sequence,
+            stop_time_update__stop_id::varchar as stop_time_update__stop_id,
+            stop_time_update__arrival::struct(delay integer, "time" bigint, uncertainty integer, scheduled_time bigint) as stop_time_update__arrival,
+            stop_time_update__departure::struct(delay integer, "time" bigint, uncertainty integer, scheduled_time bigint) as stop_time_update__departure,
+            stop_time_update__departure_occupancy_status::varchar as stop_time_update__departure_occupancy_status,
+            stop_time_update__schedule_relationship::varchar as stop_time_update__schedule_relationship,
+            stop_time_update__stop_time_properties::varchar as stop_time_update__stop_time_properties,
+            timestamp::ubigint as timestamp,
+            delay::integer as delay,
+            trip_properties__trip_id::varchar as trip_properties__trip_id,
+            trip_properties__start_date::varchar as trip_properties__start_date,
+            trip_properties__start_time::varchar as trip_properties__start_time,
+            trip_properties__shape_id::varchar as trip_properties__shape_id,
+            trip_properties__trip_headsign::varchar as trip_properties__trip_headsign,
+            trip_properties__trip_short_name::varchar as trip_properties__trip_short_name,
+            date::date as date,
+            filename::varchar as filename
+          from (values
+            (100, 'T1', false, 'trip-1', 'route-1', 0, '08:00:00', '20261125', 'SCHEDULED', null, 'vehicle-1', null, null, null, 1, 'stop-1', {'delay': 10, 'time': 1795564800, 'uncertainty': 5, 'scheduled_time': 1795564790}, {'delay': 20, 'time': 1795564860, 'uncertainty': 5, 'scheduled_time': 1795564850}, null, 'SCHEDULED', null, 1795564780, null, null, null, null, null, null, null, '2026-11-24', 'hour=23.parquet'),
+            (200, 'T2', false, 'trip-2', 'route-2', 1, '09:00:00', '20261125', 'SCHEDULED', null, 'vehicle-2', null, null, null, 2, 'stop-2', {'delay': 30, 'time': 1795568400, 'uncertainty': 5, 'scheduled_time': 1795568390}, {'delay': 40, 'time': 1795568460, 'uncertainty': 5, 'scheduled_time': 1795568450}, null, 'SCHEDULED', null, 1795568380, null, null, null, null, null, null, null, '2026-11-25', 'hour=00.parquet')
+          ) as v(header_ts, entity_id, is_deleted, trip__trip_id, trip__route_id, trip__direction_id, trip__start_time, trip__start_date, trip__schedule_relationship, trip__modified_trip, vehicle__id, vehicle__label, vehicle__license_plate, vehicle__wheelchair_accessible, stop_time_update__stop_sequence, stop_time_update__stop_id, stop_time_update__arrival, stop_time_update__departure, stop_time_update__departure_occupancy_status, stop_time_update__schedule_relationship, stop_time_update__stop_time_properties, timestamp, delay, trip_properties__trip_id, trip_properties__start_date, trip_properties__start_time, trip_properties__shape_id, trip_properties__trip_headsign, trip_properties__trip_short_name, date, filename)
+    expect:
+      rows:
+        - {header_ts: 100, trip__direction_id: 0, stop_time_update__stop_sequence: 1, stop_time_update__arrival__delay: 10, stop_time_update__departure__time: 1795564860, timestamp: 1795564780, snapshot_date: '2026-11-24', filename: 'hour=23.parquet'}
+        - {header_ts: 200, trip__direction_id: 1, stop_time_update__stop_sequence: 2, stop_time_update__arrival__delay: 30, stop_time_update__departure__time: 1795568460, timestamp: 1795568380, snapshot_date: '2026-11-25', filename: 'hour=00.parquet'}
   - name: ut_vp_cross_hour_identical
     description: >-
       The same report in the last snapshot of one hour and the first of the next keeps the earlier header_ts; snapshot_date comes from that header_ts.
@@ -20,6 +68,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -50,6 +99,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -82,6 +132,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -112,6 +163,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -124,6 +176,40 @@ unit_tests:
       rows:
         - {trip__trip_id: 'T1', header_ts: 100, own_observation_ts: 90, observation_ts: 90, observation_time_clamped: false}
         - {trip__trip_id: 'T1', header_ts: 130, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
+  - name: ut_vp_occupancy_after_advance
+    description: >-
+      A later version that changes only occupancy after a stop advance keeps the own time of the version before it.
+    model: stg_vehicle_positions
+    given:
+      - input: source('silver', 'vehicle_positions')
+        format: sql
+        rows: |
+          select
+            vehicle__id::varchar as vehicle__id,
+            vehicle__label::varchar as vehicle__label,
+            trip__trip_id::varchar as trip__trip_id,
+            trip__start_date::varchar as trip__start_date,
+            trip__direction_id::uinteger as trip__direction_id,
+            stop_id::varchar as stop_id,
+            current_stop_sequence::uinteger as current_stop_sequence,
+            current_status::varchar as current_status,
+            occupancy_status::varchar as occupancy_status,
+            occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
+            timestamp::ubigint as timestamp,
+            header_ts::bigint as header_ts,
+            filename::varchar as filename,
+            date::date as date
+          from (values
+            ('v1', 'L1', 'T1', '20261125', 0, 's1', 1, 'STOPPED_AT', 'EMPTY', null, 90, 100, 'hour=15.parquet', '2026-11-25'),
+            ('v1', 'L1', 'T1', '20261125', 0, 's2', 2, 'STOPPED_AT', 'EMPTY', null, 90, 130, 'hour=15.parquet', '2026-11-25'),
+            ('v1', 'L1', 'T1', '20261125', 0, 's2', 2, 'STOPPED_AT', 'FULL', null, 90, 160, 'hour=15.parquet', '2026-11-25')
+          ) as v(vehicle__id, vehicle__label, trip__trip_id, trip__start_date, trip__direction_id, stop_id, current_stop_sequence, current_status, occupancy_status, occupancy_percentage, timestamp, header_ts, filename, date)
+    expect:
+      rows:
+        - {trip__trip_id: 'T1', header_ts: 100, own_observation_ts: 90, observation_ts: 90, observation_time_clamped: false}
+        - {trip__trip_id: 'T1', header_ts: 130, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
+        - {trip__trip_id: 'T1', header_ts: 160, own_observation_ts: 130, observation_ts: 130, observation_time_clamped: false}
   - name: ut_vp_occupancy_only
     description: >-
       A later version that changes only occupancy keeps timestamp.
@@ -143,6 +229,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -174,6 +261,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -207,6 +295,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -240,6 +329,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -273,6 +363,7 @@ unit_tests:
             current_status::varchar as current_status,
             occupancy_status::varchar as occupancy_status,
             occupancy_percentage::uinteger as occupancy_percentage,
+            null::struct(id varchar, "label" varchar, occupancy_status varchar, occupancy_percentage integer, carriage_sequence uinteger)[] as multi_carriage_details,
             timestamp::ubigint as timestamp,
             header_ts::bigint as header_ts,
             filename::varchar as filename,
@@ -359,6 +450,46 @@ unit_tests:
       rows:
         - {alert_id: 'X', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
         - {alert_id: 'X', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: null}
+  - name: ut_alerts_content_aba
+    description: >-
+      A A-B-A header_text sequence creates three versions.
+    model: stg_alerts
+    given:
+      - input: source('silver', 'alerts')
+        format: sql
+        rows: |
+          select
+            v.header_ts::bigint as header_ts,
+            v.entity_id::varchar as entity_id,
+            null::boolean as is_deleted,
+            v.active_period::struct("start" ubigint, "end" ubigint)[] as active_period,
+            null::struct("start" ubigint, "end" ubigint)[] as communication_period,
+            null::struct("start" ubigint, "end" ubigint)[] as impact_period,
+            null::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity,
+            null::varchar as cause,
+            v.effect::varchar as effect,
+            null::struct("text" varchar, "language" varchar)[] as url__translation,
+            v.header_text__translation::struct("text" varchar, "language" varchar)[] as header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as description_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_header_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as tts_description_text__translation,
+            v.severity_level::varchar as severity_level,
+            null::struct(url varchar, media_type varchar, "language" varchar)[] as image__localized_image,
+            null::struct("text" varchar, "language" varchar)[] as image_alternative_text__translation,
+            null::struct("text" varchar, "language" varchar)[] as cause_detail__translation,
+            null::struct("text" varchar, "language" varchar)[] as effect_detail__translation,
+            'hour=15.parquet' as filename,
+            date '2026-11-25' as date
+          from (values
+            (100, 'X', 'DELAY', 'WARNING', [{'text': 'A', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (200, 'X', 'DELAY', 'WARNING', [{'text': 'B', 'language': 'en'}], [{'start': 50, 'end': 1000}]),
+            (300, 'X', 'DELAY', 'WARNING', [{'text': 'A', 'language': 'en'}], [{'start': 50, 'end': 1000}])
+          ) as v(header_ts, entity_id, effect, severity_level, header_text__translation, active_period)
+    expect:
+      rows:
+        - {alert_id: 'X', header_text: 'A', version_first_seen_ts: 100, version_last_seen_ts: 100, version_snapshot_count: 1, version_ended_ts: 200}
+        - {alert_id: 'X', header_text: 'B', version_first_seen_ts: 200, version_last_seen_ts: 200, version_snapshot_count: 1, version_ended_ts: 300}
+        - {alert_id: 'X', header_text: 'A', version_first_seen_ts: 300, version_last_seen_ts: 300, version_snapshot_count: 1, version_ended_ts: null}
   - name: ut_alerts_leave_and_return
     description: >-
       An alert absent from a snapshot that exists and then back with the same content is two versions; the first ends at the snapshot it left.
@@ -601,11 +732,41 @@ unit_tests:
               'stop_id': null, 'direction_id': null},
              {'agency_id': '1', 'route_id': 'Red', 'route_type': 1,
               'trip': {'trip_id': 'T1', 'route_id': 'Red', 'direction_id': 0, 'start_time': null,
-                       'start_date': '20261125', 'schedule_relationship': null, 'modified_trip': null},
-              'stop_id': 'place-sstat', 'direction_id': 1}]::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[] as informed_entity
+                       'start_date': '20261125', 'schedule_relationship': null,
+                       'modified_trip': {'modifications_id': 'M1', 'affected_trip_id': 'T0',
+                                         'start_time': '08:00', 'start_date': '20261125'}},
+              'stop_id': 'place-sstat', 'direction_id': 1}]::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id integer, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id integer)[] as informed_entity
           union all
-          select 'Y', 100, []::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id uinteger, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id uinteger)[]
+          select 'Y', 100, []::struct(agency_id varchar, route_id varchar, route_type integer, trip struct(trip_id varchar, route_id varchar, direction_id integer, start_time varchar, start_date varchar, schedule_relationship varchar, modified_trip struct(modifications_id varchar, affected_trip_id varchar, start_time varchar, start_date varchar)), stop_id varchar, direction_id integer)[]
     expect:
       rows:
-        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null}
-        - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1}
+        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null, trip__direction_id: null, trip__modified_trip__modifications_id: null, trip__modified_trip__affected_trip_id: null, trip__modified_trip__start_time: null, trip__modified_trip__start_date: null}
+        - {alert_id: 'X', entity_index: 2, route_id: 'Red', stop_id: 'place-sstat', trip__trip_id: 'T1', direction_id: 1, trip__direction_id: 0, trip__modified_trip__modifications_id: 'M1', trip__modified_trip__affected_trip_id: 'T0', trip__modified_trip__start_time: '08:00', trip__modified_trip__start_date: '20261125'}
+  - name: ut_informed_entities_null_list
+    description: >-
+      A null informed_entity list contributes no rows.
+    model: stg_alert_informed_entities
+    given:
+      - input: ref('stg_alerts')
+        format: sql
+        rows: |
+          select 'X' as alert_id, 100::bigint as version_first_seen_ts,
+            null::struct(agency_id varchar, route_id varchar, route_type integer,
+              trip struct(trip_id varchar, route_id varchar, direction_id integer,
+                start_time varchar, start_date varchar, schedule_relationship varchar,
+                modified_trip struct(modifications_id varchar, affected_trip_id varchar,
+                  start_time varchar, start_date varchar)),
+              stop_id varchar, direction_id integer)[] as informed_entity
+          union all
+          select 'X', 200,
+            [{'agency_id': '1', 'route_id': 'Red', 'route_type': 1, 'trip': null,
+              'stop_id': null, 'direction_id': null}]::struct(
+                agency_id varchar, route_id varchar, route_type integer,
+                trip struct(trip_id varchar, route_id varchar, direction_id integer,
+                  start_time varchar, start_date varchar, schedule_relationship varchar,
+                  modified_trip struct(modifications_id varchar, affected_trip_id varchar,
+                    start_time varchar, start_date varchar)),
+                stop_id varchar, direction_id integer)[]
+    expect:
+      rows:
+        - {alert_id: 'X', entity_index: 1, route_id: 'Red', stop_id: null, trip__trip_id: null, direction_id: null, trip__direction_id: null, trip__modified_trip__modifications_id: null, trip__modified_trip__affected_trip_id: null, trip__modified_trip__start_time: null, trip__modified_trip__start_date: null}
