@@ -38,3 +38,4 @@ vars:
     Alerts: 60
   intermediate_route_types: [0, 1, 3]
   excluded_route_descs: ['Rail Replacement Bus']
+  fixture_build: false

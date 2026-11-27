@@ -20,3 +20,20 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest
+      # dbt build runs these again; this step fails fast and needs no data.
+      - name: dbt unit tests
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+          MBTA_DATA_DIR: /nonexistent
+          MBTA_WAREHOUSE: ${{ runner.temp }}/unit.duckdb
+        run: uv run dbt test --select "test_type:unit"
+      - name: Generate the dbt fixture
+        run: uv run python tests/dbt_fixture.py "$RUNNER_TEMP/fixture"
+      - name: dbt build on the fixture
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+          MBTA_DATA_DIR: ${{ runner.temp }}/fixture
+          MBTA_WAREHOUSE: ${{ runner.temp }}/fixture/warehouse.duckdb
+        run: uv run dbt build --vars '{fixture_build: true}'

@@ -40,6 +40,18 @@ into `data/warehouse.duckdb`. Set `MBTA_DATA_DIR` and `MBTA_WAREHOUSE` to
 read or write elsewhere. Running dbt directly needs an absolute
 `MBTA_DATA_DIR`; otherwise the views only work from `dbt/`.
 
+`make dbt-fixture` runs the same full build without real data, as CI does.
+`tests/dbt_fixture.py` writes one synthetic service day (static GTFS, silver
+Parquet and a fetch log) into a temporary directory with the pipeline's own
+writers, then `dbt build --vars '{fixture_build: true}'` runs there. That var
+enables `dbt/tests/assert_fixture_marts_non_empty.sql`, which fails when any
+mart is empty or has no row with a valid status. The unit tests alone need no
+data:
+
+```bash
+cd dbt && MBTA_DATA_DIR=/nonexistent MBTA_WAREHOUSE=/tmp/unit.duckdb DBT_PROFILES_DIR=. uv run dbt test --select "test_type:unit"
+```
+
 ## Stack
 
 Python poller, Parquet data lake, DuckDB, dbt, Dagster, and an Evidence
