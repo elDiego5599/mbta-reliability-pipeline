@@ -180,3 +180,46 @@ models:
           - accepted_values:
               arguments:
                 values: [valid, clamped_report, high_uncertainty]
+
+  - name: agg_route_hour_reliability
+    description: One route-hour reliability summary with schedule, coverage, headway, and adherence metrics.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, route_id, direction_id, hour_start_ts]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_routes')
+                field: route_id
+      - name: direction_id
+        data_tests: [not_null]
+      - name: hour_start_ts
+        data_tests: [not_null]
+      - name: scheduled_headway_count
+        data_tests: [not_null]
+      - name: vp_coverage
+        data_tests: [not_null]
+      - name: headway_count
+        data_tests: [not_null]
+      - name: valid_headway_count
+        data_tests: [not_null]
+      - name: excluded_uncertainty_count
+        data_tests: [not_null]
+      - name: excluded_clamped_count
+        data_tests: [not_null]
+      - name: headway_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [no_schedule, not_frequent, low_coverage, too_few_headways, reported]
+      - name: adherence_count
+        data_tests: [not_null]
+      - name: valid_adherence_count
+        data_tests: [not_null]
