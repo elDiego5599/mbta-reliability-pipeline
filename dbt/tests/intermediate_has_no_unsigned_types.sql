@@ -7,6 +7,7 @@
 -- depends_on: {{ ref('int_trip_paths') }}
 -- depends_on: {{ ref('int_stop_crossings') }}
 -- depends_on: {{ ref('int_feed_coverage') }}
+-- depends_on: {{ ref('int_shape_stop_distances') }}
 select
     table_schema,
     table_name,
