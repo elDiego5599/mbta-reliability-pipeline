@@ -426,6 +426,31 @@ Data tests: `unique_combination` and `not_null` on every key;
 Then `make dbt-build` on the real data into a scratch warehouse, with the row
 counts and warnings recorded here.
 
+Result for PR A (2026-11-27, silver to the morning of 2026-11-27 UTC,
+service dates 2026-11-25 to 11-27): PASS=271, WARN=2, ERROR=0. The two
+warnings are the known ones from earlier layers
+(`stg_vehicle_positions_clamped_per_hour`, `assert_crossings_monotonic`).
+
+| Mart | Rows |
+|---|---|
+| `dim_routes` | 402 |
+| `dim_stops` | 10,332 |
+| `fct_headways` | 14,862 |
+| `fct_schedule_adherence` | 122,804 |
+| `agg_route_hour_reliability` | 14,537 |
+
+- `fct_headways` status: 12,445 `valid`, 2,415 `high_uncertainty`, 2
+  `clamped_report`.
+- `fct_schedule_adherence` status: 104,153 `valid`, 18,591
+  `high_uncertainty`, 60 `clamped_report`. On-time share over valid rows is
+  0.556.
+- `agg_route_hour_reliability` status: 9,849 `not_frequent`, 3,088
+  `low_coverage`, 1,064 `reported`, 293 `no_schedule`, 243
+  `too_few_headways`. Over reported hours the median headway p50 is 640 s,
+  the median p90 is 1,027 s, and the median bunching and gapping rates are 0.
+- No crossing has a null `crossing_uncertainty_s` and no adherence row has a
+  null `adherence_s`, so the null cases parked in review do not occur.
+
 ## Left to the builder
 
 - SQL shape and column order, as long as orders are fully specified and ties
