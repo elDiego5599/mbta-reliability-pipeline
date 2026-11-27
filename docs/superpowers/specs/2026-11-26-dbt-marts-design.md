@@ -304,6 +304,21 @@ Known limit: a shape that passes the same stop twice (a loop) projects it
 once. A segment whose projected distance is not positive is `no_distance`;
 a loop that gives a positive but wrong distance is not detected.
 
+Facts checked on the real data (2026-11-27, build of PR B, three service
+days 2026-11-25 to 2026-11-27, two static versions):
+
+- `int_shape_stop_distances`: 9,650 rows, 652 shapes, 1,409 stops.
+  `offset_m` median 6.7, p90 17.5, p99 67.8, max 117.3; no row above the
+  200 m threshold. The model builds in under one second.
+- `fct_segment_speeds`: 108,881 segments over 16,632 trips (105,842
+  scheduled, 3,039 pattern matches), every one with a shape and a
+  distance. Status: `valid` 88,917 (81.7%), `high_uncertainty` 19,687
+  (18.1%), `implausible_speed` 151, `clamped_report` 118,
+  `non_positive_time` 8, `no_distance` 0.
+- Valid segments: speed p5 8.5, median 18.7, p95 41.0 km/h (min 0.7, max
+  99.97); distance p5 303, median 974, p95 2,885 m; travel time p5 68,
+  median 173, p95 544 s. The largest implausible speed is 3,933 km/h.
+
 ### `fct_schedule_adherence`
 
 Grain: one scheduled trip at one timepoint, key (`service_date`, `trip_id`,
