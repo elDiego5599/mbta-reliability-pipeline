@@ -208,6 +208,12 @@ version, keyed by (`vehicle__id`, `timestamp`, `header_ts`), where
 `header_ts` collapse to the smallest `header_ts`, also across hours. A
 vehicle's reports are ordered by (`timestamp`, `header_ts`).
 
+Amended 2026-11-26 for the marts (design `docs/superpowers/specs/2026-11-26-dbt-marts-design.md`):
+marts are built as tables in the schema `marts`. `dim_routes` and
+`dim_stops` keep every route and stop of every stored static version, with
+the attributes of the newest version that has it; that is what "current"
+means above.
+
 ### 6.2 Stop crossings
 
 For each vehicle on a trip, consecutive reports are ordered by
@@ -264,7 +270,9 @@ Amended 2026-11-26 for the intermediate models (design
 
 - Generic: `unique` and `not_null` on every grain key, `relationships` from
   facts to dims, `accepted_values` on enums such as `current_status`.
-- Singular: headways are positive; p90 is at least p50; adherence is within
+- Singular: headways are not negative (amended 2026-11-26: two vehicles
+  can cross a measure point in the same snapshot, so a headway of 0 is a
+  real bunching case, not an error); p90 is at least p50; adherence is within
   ±3 hours; every service date in marts has a static version.
 - dbt unit tests (dbt 1.8+) on the two pieces of logic most likely to be wrong:
   nearest-rank percentile and crossing interpolation, with hand-computed
@@ -299,6 +307,26 @@ Rules that keep the metrics honest:
 - The bunching and on-time thresholds above are this project's definitions.
   They are stated wherever the numbers appear. MBTA's own service standards
   will be checked in phase 2 and the thresholds aligned if they differ.
+
+Amended 2026-11-26 for the marts (design `docs/superpowers/specs/2026-11-26-dbt-marts-design.md`):
+
+- **Usable crossings.** A crossing is usable when `crossing_uncertainty_s`
+  is 90 s or less. Section 6.2 bounds a normal crossing: a bracket of
+  about 30 s at 30 s polling, plus lateness of up to 60 s when a snapshot
+  is missing. 30 + 60 = 90 s is the worst normal case; anything wider
+  means the vehicle went unobserved for longer than one missed poll.
+- **Status.** Every fact row has a status, in this precedence:
+  `clamped_report` when a crossing it uses has a clamped observation time
+  (a lower bound, not an observation); `high_uncertainty` when a crossing
+  it uses is above 90 s; then the reasons specific to the metric; then
+  `valid`. Metrics are computed over `valid` rows, and the other rows are
+  counted, not dropped.
+- **Hour of a metric.** The UTC hour of the event, keyed by its start
+  epoch (`hour_start_ts`); New York offsets are whole hours, so the local
+  hour is derived from it. A headway takes the hour of its later crossing,
+  a segment the hour of its earlier crossing, and schedule adherence the
+  hour of the scheduled time, so an hour's on-time share does not depend
+  on how late trips ran.
 
 ## 8. Orchestration (phase 3)
 
