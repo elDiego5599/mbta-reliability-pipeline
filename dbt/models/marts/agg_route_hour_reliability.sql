@@ -25,6 +25,7 @@ scheduled_measure_departures as (
         and measure.route_id = scheduled.route_id
         and measure.direction_id = scheduled.direction_id
         and measure.station_id = scheduled.station_id
+    where scheduled.scheduled_departure_ts is not null
 ),
 
 ordered_scheduled as (
@@ -171,11 +172,7 @@ joined as (
         scheduled.scheduled_headway_p50_s,
         coalesce(scheduled.scheduled_headway_count > 0
             and scheduled.scheduled_headway_p50_s <= {{ var('max_frequent_headway_s') }}, false) as is_frequent,
-        case
-            when active_measures.station_id is not null
-                then coalesce(coverage.vp_coverage, 0.0)
-            else 0.0
-        end as vp_coverage,
+        coalesce(coverage.vp_coverage, 0.0) as vp_coverage,
         coalesce(headways.headway_count, 0)::bigint as headway_count,
         coalesce(headways.valid_headway_count, 0)::bigint as valid_headway_count,
         coalesce(headways.excluded_clamped_count, 0)::bigint as excluded_clamped_count,
@@ -245,7 +242,7 @@ final as (
         end as reported_headway_p90_s,
         case
             when headway_status = 'reported'
-                then headway_p50_s / scheduled_headway_p50_s
+                then headway_p50_s / nullif(scheduled_headway_p50_s, 0)
             else null
         end as headway_ratio,
         case
