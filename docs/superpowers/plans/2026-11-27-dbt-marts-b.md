@@ -19,8 +19,10 @@ Python 3.12.
 by the owner, 2026-11-26), sections `fct_segment_speeds`,
 `int_shape_stop_distances` (helper) and Crossing statuses. PR A
 (`docs/superpowers/plans/2026-11-26-dbt-marts-a.md`) is merged first; this
-branch starts from its tip and does not touch its files except the vars in
-`dbt/dbt_project.yml`.
+branch starts from its tip. Its code and tests touch none of PR A's files
+except the vars in `dbt/dbt_project.yml`; Tasks 3 and 4 also edit
+`docs/spec.md` and the design doc, which PR A changes too, so a merge of
+main may need those resolved by hand.
 
 ## Global Constraints
 

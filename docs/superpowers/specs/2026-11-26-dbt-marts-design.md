@@ -161,7 +161,7 @@ dbt/tests/                       (singular tests below)
 | Var | Value | Source |
 |---|---|---|
 | `max_crossing_uncertainty_s` | 90 | Builder call, below |
-| `max_stop_shape_offset_m` | 200 | Builder call: 8 times the measured p99 |
+| `max_stop_shape_offset_m` | 200 | Builder call: about 3 times the timepoint p99 (68 m), above the max (117 m) |
 | `max_segment_speed_kmh` | 100 | Builder call: no in-scope mode runs faster |
 | `max_frequent_headway_s` | 900 | Spec 7 and ADR 0005: 15 minutes |
 | `min_hour_coverage` | 0.9 | Spec 7 and 9 |
@@ -310,8 +310,8 @@ days 2026-11-25 to 2026-11-27, two static versions):
 - `int_shape_stop_distances`: 9,650 rows, 652 shapes, 1,409 stops.
   `offset_m` median 6.7, p90 17.5, p99 67.8, max 117.3; no row above the
   200 m threshold. The model builds in under one second.
-- `fct_segment_speeds`: 108,881 segments over 16,632 trips (105,842
-  scheduled, 3,039 pattern matches), every one with a shape and a
+- `fct_segment_speeds`: 108,881 segments over 16,632 trips (segments:
+  105,842 scheduled, 3,039 pattern match), every one with a shape and a
   distance. Status: `valid` 88,917 (81.7%), `high_uncertainty` 19,687
   (18.1%), `implausible_speed` 151, `clamped_report` 118,
   `non_positive_time` 8, `no_distance` 0.
