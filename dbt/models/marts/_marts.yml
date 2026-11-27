@@ -44,3 +44,57 @@ models:
                 field: feed_version
       - name: station_id
         data_tests: [not_null]
+
+  - name: fct_headways
+    description: One observed headway at a route measure point.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_routes')
+                field: route_id
+      - name: direction_id
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: stop_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+      - name: headway_s
+        data_tests: [not_null]
+      - name: hour_start_ts
+        data_tests: [not_null]
+      - name: headway_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [valid, clamped_report, high_uncertainty]

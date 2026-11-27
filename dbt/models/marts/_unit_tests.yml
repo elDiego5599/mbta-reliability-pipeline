@@ -121,3 +121,230 @@ unit_tests:
           ('P1', 'V1', null, 'PL1', 'PL1', 0, null, null, null, null),
           ('PL1', 'V1', null, 'PL1', null, 1, null, null, null, null)
         ) as e(stop_id, feed_version, stop_name, station_id, parent_station, location_type, platform_name, stop_lat, stop_lon, municipality)
+
+  - name: ut_headways
+    description: Pair crossings at the active-version measure point and ignore other stations.
+    model: fct_headways
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T1', 5, 'S_A', 'ST_A', 'V2', 'R1', 0, 'P_MAIN', 'scheduled', 1000.0, 'stopped', 30, false),
+            ('2026-11-25', 'T2', 5, 'S_A', 'ST_A', 'V2', 'R1', 0, 'P_MAIN', 'scheduled', 1600.5, 'stopped', 30, false),
+            ('2026-11-25', 'T_BR', 5, 'S_A', 'ST_A', 'V2', 'R1', 0, 'P_BRANCH', 'scheduled', 2000.0, 'stopped', 30, false),
+            ('2026-11-25', 'T3', 5, 'S_A', 'ST_A', 'V2', 'R1', 0, 'P_MAIN', 'scheduled', 2500.0, 'stopped', 30, false),
+            ('2026-11-25', 'T4', 5, 'S_A', 'ST_A', 'V2', 'R1', 0, 'P_MAIN', 'scheduled', 3700.0, 'stopped', 30, false),
+            ('2026-11-25', 'TB1', 6, 'S_B', 'ST_B', 'V1', 'R1', 0, 'P_MAIN', 'scheduled', 1300.0, 'stopped', 30, false),
+            ('2026-11-25', 'TC1', 7, 'S_C', 'ST_C', 'V2', 'R1', 0, 'P_MAIN', 'scheduled', 1200.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            a.service_date::date as service_date,
+            a.feed_version::varchar as feed_version
+          from (values
+            ('2026-11-25', 'V2')
+          ) as a(service_date, feed_version)
+      - input: ref('int_measure_points')
+        format: sql
+        rows: |
+          select
+            m.feed_version::varchar as feed_version,
+            m.route_id::varchar as route_id,
+            m.direction_id::integer as direction_id,
+            m.station_id::varchar as station_id,
+            m.stop_id::varchar as stop_id,
+            m.stop_sequence::integer as stop_sequence
+          from (values
+            ('V2', 'R1', 0, 'ST_A', 'S_A', 5),
+            ('V1', 'R1', 0, 'ST_B', 'S_B', 6)
+          ) as m(feed_version, route_id, direction_id, station_id, stop_id, stop_sequence)
+    expect:
+      rows:
+        - {service_date: '2026-11-25', route_id: 'R1', direction_id: 0, station_id: 'ST_A', stop_sequence: 5, trip_id: 'T2', prev_trip_id: 'T1', headway_s: 600.5, hour_start_ts: 0, headway_status: 'valid'}
+        - {service_date: '2026-11-25', route_id: 'R1', direction_id: 0, station_id: 'ST_A', stop_sequence: 5, trip_id: 'T_BR', prev_trip_id: 'T2', headway_s: 399.5, hour_start_ts: 0, headway_status: 'valid'}
+        - {service_date: '2026-11-25', route_id: 'R1', direction_id: 0, station_id: 'ST_A', stop_sequence: 5, trip_id: 'T3', prev_trip_id: 'T_BR', headway_s: 500.0, hour_start_ts: 0, headway_status: 'valid'}
+        - {service_date: '2026-11-25', route_id: 'R1', direction_id: 0, station_id: 'ST_A', stop_sequence: 5, trip_id: 'T4', prev_trip_id: 'T3', headway_s: 1200.0, hour_start_ts: 3600, headway_status: 'valid'}
+
+  - name: ut_headways_status
+    description: Crossing status precedence applies to both crossings of a headway.
+    model: fct_headways
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'R1_T1', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'R1_T2', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 300.0, 'stopped', 200, false),
+            ('2026-11-25', 'R1_T3', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 600.0, 'stopped', 30, false),
+            ('2026-11-25', 'R1_T4', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 900.0, 'stopped', 30, false),
+            ('2026-11-25', 'R2_T1', 10, 'S1', 'ST1', 'V2', 'R2', 0, 'P2', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'R2_T2', 10, 'S1', 'ST1', 'V2', 'R2', 0, 'P2', 'scheduled', 300.0, 'stopped', 200, true),
+            ('2026-11-25', 'R2_T3', 10, 'S1', 'ST1', 'V2', 'R2', 0, 'P2', 'scheduled', 600.0, 'stopped', 30, false),
+            ('2026-11-25', 'R2_T4', 10, 'S1', 'ST1', 'V2', 'R2', 0, 'P2', 'scheduled', 900.0, 'stopped', 30, false),
+            ('2026-11-25', 'R3_T1', 10, 'S1', 'ST1', 'V2', 'R3', 0, 'P3', 'scheduled', 0.0, 'stopped', 30, true),
+            ('2026-11-25', 'R3_T2', 10, 'S1', 'ST1', 'V2', 'R3', 0, 'P3', 'scheduled', 300.0, 'stopped', 30, false),
+            ('2026-11-25', 'R3_T3', 10, 'S1', 'ST1', 'V2', 'R3', 0, 'P3', 'scheduled', 600.0, 'stopped', 30, false),
+            ('2026-11-25', 'R3_T4', 10, 'S1', 'ST1', 'V2', 'R3', 0, 'P3', 'scheduled', 900.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select
+            a.service_date::date as service_date,
+            a.feed_version::varchar as feed_version
+          from (values ('2026-11-25', 'V2')) as a(service_date, feed_version)
+      - input: ref('int_measure_points')
+        format: sql
+        rows: |
+          select
+            m.feed_version::varchar as feed_version,
+            m.route_id::varchar as route_id,
+            m.direction_id::integer as direction_id,
+            m.station_id::varchar as station_id,
+            m.stop_id::varchar as stop_id,
+            m.stop_sequence::integer as stop_sequence
+          from (values
+            ('V2', 'R1', 0, 'ST1', 'S1', 10),
+            ('V2', 'R2', 0, 'ST1', 'S1', 10),
+            ('V2', 'R3', 0, 'ST1', 'S1', 10)
+          ) as m(feed_version, route_id, direction_id, station_id, stop_id, stop_sequence)
+    expect:
+      rows:
+        - {route_id: 'R1', trip_id: 'R1_T2', stop_sequence: 10, headway_status: 'high_uncertainty'}
+        - {route_id: 'R1', trip_id: 'R1_T3', stop_sequence: 10, headway_status: 'high_uncertainty'}
+        - {route_id: 'R1', trip_id: 'R1_T4', stop_sequence: 10, headway_status: 'valid'}
+        - {route_id: 'R2', trip_id: 'R2_T2', stop_sequence: 10, headway_status: 'clamped_report'}
+        - {route_id: 'R2', trip_id: 'R2_T3', stop_sequence: 10, headway_status: 'clamped_report'}
+        - {route_id: 'R2', trip_id: 'R2_T4', stop_sequence: 10, headway_status: 'valid'}
+        - {route_id: 'R3', trip_id: 'R3_T2', stop_sequence: 10, headway_status: 'clamped_report'}
+        - {route_id: 'R3', trip_id: 'R3_T3', stop_sequence: 10, headway_status: 'valid'}
+        - {route_id: 'R3', trip_id: 'R3_T4', stop_sequence: 10, headway_status: 'valid'}
+
+  - name: ut_headways_zero
+    description: Zero headways are kept and ordered by trip_id.
+    model: fct_headways
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'TB', 10, 'S1', 'ST1', 'V2', 'RZ', 0, 'PZ', 'scheduled', 500.0, 'stopped', 30, false),
+            ('2026-11-25', 'TA', 10, 'S1', 'ST1', 'V2', 'RZ', 0, 'PZ', 'scheduled', 500.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select a.service_date::date as service_date, a.feed_version::varchar as feed_version
+          from (values ('2026-11-25', 'V2')) as a(service_date, feed_version)
+      - input: ref('int_measure_points')
+        format: sql
+        rows: |
+          select
+            m.feed_version::varchar as feed_version,
+            m.route_id::varchar as route_id,
+            m.direction_id::integer as direction_id,
+            m.station_id::varchar as station_id,
+            m.stop_id::varchar as stop_id,
+            m.stop_sequence::integer as stop_sequence
+          from (values ('V2', 'RZ', 0, 'ST1', 'S1', 10))
+          as m(feed_version, route_id, direction_id, station_id, stop_id, stop_sequence)
+    expect:
+      rows:
+        - {trip_id: 'TB', prev_trip_id: 'TA', headway_s: 0.0, headway_status: 'valid'}
+
+  - name: ut_headways_service_date_boundary
+    description: Crossings on adjacent service dates never pair.
+    model: fct_headways
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T_LATE', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 1000.0, 'stopped', 30, false),
+            ('2026-11-26', 'T_EARLY', 10, 'S1', 'ST1', 'V2', 'R1', 0, 'P1', 'scheduled', 1060.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_static_active_version')
+        format: sql
+        rows: |
+          select a.service_date::date as service_date, a.feed_version::varchar as feed_version
+          from (values
+            ('2026-11-25', 'V2'),
+            ('2026-11-26', 'V2')
+          ) as a(service_date, feed_version)
+      - input: ref('int_measure_points')
+        format: sql
+        rows: |
+          select
+            m.feed_version::varchar as feed_version,
+            m.route_id::varchar as route_id,
+            m.direction_id::integer as direction_id,
+            m.station_id::varchar as station_id,
+            m.stop_id::varchar as stop_id,
+            m.stop_sequence::integer as stop_sequence
+          from (values ('V2', 'R1', 0, 'ST1', 'S1', 10))
+          as m(feed_version, route_id, direction_id, station_id, stop_id, stop_sequence)
+    expect:
+      rows: []
