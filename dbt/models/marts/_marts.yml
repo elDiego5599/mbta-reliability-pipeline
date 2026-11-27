@@ -64,6 +64,7 @@ models:
       - name: direction_id
         data_tests: [not_null]
       - name: feed_version
+        description: Active static version for the service date.
         data_tests:
           - not_null
           - relationships:
@@ -88,11 +89,26 @@ models:
         data_tests: [not_null]
       - name: stop_sequence
         data_tests: [not_null]
+      - name: crossing_uncertainty_s
+        data_tests: [not_null]
+      - name: prev_crossing_uncertainty_s
+        data_tests: [not_null]
+      - name: crossing_ts
+        data_tests: [not_null]
+      - name: prev_crossing_ts
+        data_tests: [not_null]
+      - name: crossing_method
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [stopped, interpolated, terminal_arrival]
       - name: headway_s
         data_tests: [not_null]
       - name: hour_start_ts
         data_tests: [not_null]
       - name: headway_status
+        description: Uses the dbt var max_crossing_uncertainty_s.
         data_tests:
           - not_null
           - accepted_values:
@@ -124,6 +140,7 @@ models:
       - name: route_pattern_id
         data_tests: [not_null]
       - name: feed_version
+        description: The version carried by the crossing.
         data_tests:
           - not_null
           - relationships:
@@ -165,6 +182,7 @@ models:
       - name: adherence_s
         data_tests: [not_null]
       - name: is_on_time
+        description: Uses the dbt vars on_time_early_s and on_time_late_s.
         data_tests: [not_null]
       - name: crossing_method
         data_tests:
@@ -175,6 +193,7 @@ models:
       - name: crossing_uncertainty_s
         data_tests: [not_null]
       - name: adherence_status
+        description: Uses the dbt var max_crossing_uncertainty_s.
         data_tests:
           - not_null
           - accepted_values:
@@ -201,9 +220,22 @@ models:
         data_tests: [not_null]
       - name: hour_start_ts
         data_tests: [not_null]
+      - name: hour_start_local
+        data_tests: [not_null]
+      - name: local_hour
+        data_tests: [not_null]
+      - name: station_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: is_frequent
+        data_tests: [not_null]
       - name: scheduled_headway_count
         data_tests: [not_null]
       - name: vp_coverage
+        description: Capped at 1, or 0 when the hour has no coverage rows.
         data_tests: [not_null]
       - name: headway_count
         data_tests: [not_null]
@@ -214,11 +246,16 @@ models:
       - name: excluded_clamped_count
         data_tests: [not_null]
       - name: headway_status
+        description: Uses the dbt vars min_hour_coverage, min_headways_per_hour, and max_frequent_headway_s.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [no_schedule, not_frequent, low_coverage, too_few_headways, reported]
+      - name: bunching_rate
+        description: Uses the dbt var bunching_ratio.
+      - name: gapping_rate
+        description: Uses the dbt var gapping_ratio.
       - name: adherence_count
         data_tests: [not_null]
       - name: valid_adherence_count

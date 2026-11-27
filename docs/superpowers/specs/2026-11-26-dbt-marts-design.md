@@ -332,7 +332,7 @@ Columns: `service_date`, `trip_id`, `stop_sequence`, `route_id`,
 
 Grain: one route, direction, service date and hour, key (`service_date`,
 `route_id`, `direction_id`, `hour_start_ts`). A row exists when the hour has
-a scheduled measure point crossing, an observed headway, or an adherence
+a scheduled headway, an observed headway, or an adherence
 row.
 
 Scheduled headways: rows of `int_scheduled_stop_times` at the measure
