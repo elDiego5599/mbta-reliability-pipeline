@@ -12,10 +12,10 @@ with ranked_routes as (
         routes.line_id,
         row_number() over (
             partition by routes.route_id
-            order by versions.first_seen_at desc, routes.feed_version desc
+            order by versions.first_seen_at desc nulls last, routes.feed_version desc
         ) as route_rank
     from {{ ref('stg_static__routes') }} as routes
-    inner join {{ ref('stg_static__versions') }} as versions
+    left join {{ ref('stg_static__versions') }} as versions
         on versions.feed_version = routes.feed_version
 )
 

@@ -11,10 +11,10 @@ with ranked_stops as (
         stops.municipality,
         row_number() over (
             partition by stops.stop_id
-            order by versions.first_seen_at desc, stops.feed_version desc
+            order by versions.first_seen_at desc nulls last, stops.feed_version desc
         ) as stop_rank
     from {{ ref('stg_static__stops') }} as stops
-    inner join {{ ref('stg_static__versions') }} as versions
+    left join {{ ref('stg_static__versions') }} as versions
         on versions.feed_version = stops.feed_version
 )
 
