@@ -193,6 +193,7 @@ service day.
 | intermediate | `int_measure_points` | one route, direction and chosen timepoint |
 | intermediate | `int_stop_crossings` | one trip crossing one stop, with estimated time |
 | intermediate | `int_feed_coverage` | one feed and minute, with fetch success |
+| intermediate | `int_shape_stop_distances` | one timepoint stop on one shape in one static version, with distance along the shape |
 | marts | `fct_headways` | one observed headway at a measure point |
 | marts | `fct_segment_speeds` | one trip traversing one timepoint to timepoint segment |
 | marts | `fct_schedule_adherence` | one trip at one timepoint, actual minus scheduled |
@@ -213,6 +214,15 @@ marts are built as tables in the schema `marts`. `dim_routes` and
 `dim_stops` keep every route and stop of every stored static version, with
 the attributes of the newest version that has it; that is what "current"
 means above.
+
+Amended 2026-11-27 for the segment speeds (design `docs/superpowers/specs/2026-11-26-dbt-marts-design.md`):
+`shapes.shape_dist_traveled` is empty in the MBTA feed, so distance along a
+shape is computed. `int_shape_stop_distances` sums the haversine distance
+between consecutive shape points and projects each timepoint stop of an
+in-scope trip onto its nearest shape point (ties: the lower sequence). A
+shape that passes the same stop twice projects it once; a segment whose
+distance comes out not positive is flagged, but a loop that gives a
+positive wrong distance is not detected.
 
 ### 6.2 Stop crossings
 
@@ -327,6 +337,16 @@ Amended 2026-11-26 for the marts (design `docs/superpowers/specs/2026-11-26-dbt-
   a segment the hour of its earlier crossing, and schedule adherence the
   hour of the scheduled time, so an hour's on-time share does not depend
   on how late trips ran.
+
+- **Segment speed.** A segment is two consecutive timepoints of a trip's
+  path, kept only when both have a crossing. Its distance is the difference
+  of the two projections on the trip's shape (for a pattern match trip, the
+  shape of the pattern's representative trip). A segment is `no_distance`
+  when a stop has no projection, a projection is more than 200 m from the
+  stop (`max_stop_shape_offset_m`, 8 times the measured p99 of 25 m), or
+  the distance is not positive; `non_positive_time` when the second
+  crossing is not later than the first; and `implausible_speed` above
+  100 km/h (`max_segment_speed_kmh`; no in-scope mode runs faster).
 
 ## 8. Orchestration (phase 3)
 
