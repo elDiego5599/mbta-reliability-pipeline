@@ -1,0 +1,261 @@
+unit_tests:
+  - name: ut_segment_speeds
+    description: Build consecutive timepoint segments and calculate projected distances and speeds.
+    model: fct_segment_speeds
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('2026-11-25', 'T1', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T1', 2, 'S2', 'S2', 'V1', 'R1', 0, 'P1', 'scheduled', null),
+            ('2026-11-25', 'T1', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T1', 4, 'S4', 'S4', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP4'),
+            ('2026-11-25', 'T1', 5, 'S5', 'S5', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP5'),
+            ('2026-11-25', 'T2', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T2', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T2', 4, 'S4', 'S4', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP4'),
+            ('2026-11-25', 'T2', 5, 'S5', 'S5', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP5'),
+            ('2026-11-25', 'TP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P2', 'pattern_match', 'CP1'),
+            ('2026-11-25', 'TP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P2', 'pattern_match', 'CP3'),
+            ('2026-11-25', 'T_OFF200', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_OFF200', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_EDGE', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_EDGE', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_UNC90', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_UNC90', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3')
+          ) as p(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, checkpoint_id)
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T1', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 3599.5, 'interpolated', 40, false),
+            ('2026-11-25', 'T1', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 3699.5, 'stopped', 30, false),
+            ('2026-11-25', 'T1', 4, 'S4', 'S4', 'V1', 'R1', 0, 'P1', 'scheduled', 3849.5, 'stopped', 30, false),
+            ('2026-11-25', 'T2', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T2', 4, 'S4', 'S4', 'V1', 'R1', 0, 'P1', 'scheduled', 200.0, 'stopped', 30, false),
+            ('2026-11-25', 'T2', 5, 'S5', 'S5', 'V1', 'R1', 0, 'P1', 'scheduled', 300.0, 'stopped', 30, false),
+            ('2026-11-25', 'TP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P2', 'pattern_match', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'TP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P2', 'pattern_match', 50.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_OFF200', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_OFF200', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_EDGE', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_EDGE', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 36.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_UNC90', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 90, false),
+            ('2026-11-25', 'T_UNC90', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 90, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.trip_id::varchar as trip_id,
+            t.shape_id::varchar as shape_id
+          from (values
+            ('V1', 'T1', 'SH1'), ('V1', 'T2', 'SH1'),
+            ('V1', 'T_REP', 'SH2'), ('V1', 'T_OFF200', 'SH6'),
+            ('V1', 'T_EDGE', 'SH1'), ('V1', 'T_UNC90', 'SH1')
+          ) as t(feed_version, trip_id, shape_id)
+      - input: ref('stg_static__route_patterns')
+        format: sql
+        rows: |
+          select
+            p.feed_version::varchar as feed_version,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.representative_trip_id::varchar as representative_trip_id
+          from (values
+            ('V1', 'P1', 'T1'),
+            ('V1', 'P2', 'T_REP')
+          ) as p(feed_version, route_pattern_id, representative_trip_id)
+      - input: ref('int_shape_stop_distances')
+        format: sql
+        rows: |
+          select
+            d.feed_version::varchar as feed_version,
+            d.shape_id::varchar as shape_id,
+            d.stop_id::varchar as stop_id,
+            d.shape_dist_m::double as shape_dist_m,
+            d.offset_m::double as offset_m
+          from (values
+            ('V1', 'SH1', 'S1', 0.0, 5.0),
+            ('V1', 'SH1', 'S3', 1000.0, 5.0),
+            ('V1', 'SH1', 'S4', 2500.0, 5.0),
+            ('V1', 'SH1', 'S5', 3000.0, 5.0),
+            ('V1', 'SH2', 'S1', 0.0, 5.0),
+            ('V1', 'SH2', 'S3', 500.0, 5.0),
+            ('V1', 'SH6', 'S1', 0.0, 200.0),
+            ('V1', 'SH6', 'S3', 1000.0, 0.0)
+          ) as d(feed_version, shape_id, stop_id, shape_dist_m, offset_m)
+    expect:
+      rows:
+        - {trip_id: 'T1', from_stop_sequence: 1, to_stop_sequence: 3, travel_time_s: 100.0, distance_m: 1000.0, speed_kmh: 36.0, hour_start_ts: 0, shape_id: 'SH1', from_crossing_method: 'interpolated', segment_status: 'valid'}
+        - {trip_id: 'T1', from_stop_sequence: 3, to_stop_sequence: 4, travel_time_s: 150.0, distance_m: 1500.0, speed_kmh: 36.0, hour_start_ts: 3600, shape_id: 'SH1', from_crossing_method: 'stopped', segment_status: 'valid'}
+        - {trip_id: 'T2', from_stop_sequence: 4, to_stop_sequence: 5, travel_time_s: 100.0, distance_m: 500.0, speed_kmh: 18.0, hour_start_ts: 0, shape_id: 'SH1', from_crossing_method: 'stopped', segment_status: 'valid'}
+        - {trip_id: 'TP', from_stop_sequence: 1, to_stop_sequence: 3, travel_time_s: 50.0, distance_m: 500.0, speed_kmh: 36.0, hour_start_ts: 0, shape_id: 'SH2', from_crossing_method: 'stopped', segment_status: 'valid'}
+        - {trip_id: 'T_OFF200', from_stop_sequence: 1, to_stop_sequence: 3, travel_time_s: 100.0, distance_m: 1000.0, speed_kmh: 36.0, hour_start_ts: 0, shape_id: 'SH6', from_crossing_method: 'stopped', segment_status: 'valid'}
+        - {trip_id: 'T_EDGE', from_stop_sequence: 1, to_stop_sequence: 3, travel_time_s: 36.0, distance_m: 1000.0, speed_kmh: 100.0, hour_start_ts: 0, shape_id: 'SH1', from_crossing_method: 'stopped', segment_status: 'valid'}
+        - {trip_id: 'T_UNC90', from_stop_sequence: 1, to_stop_sequence: 3, travel_time_s: 100.0, distance_m: 1000.0, speed_kmh: 36.0, hour_start_ts: 0, shape_id: 'SH1', from_crossing_method: 'stopped', segment_status: 'valid'}
+
+  - name: ut_segment_speeds_status
+    description: Apply segment status precedence and preserve null metrics where appropriate.
+    model: fct_segment_speeds
+    given:
+      - input: ref('int_trip_paths')
+        format: sql
+        rows: |
+          select
+            p.service_date::date as service_date,
+            p.trip_id::varchar as trip_id,
+            p.stop_sequence::integer as stop_sequence,
+            p.stop_id::varchar as stop_id,
+            p.station_id::varchar as station_id,
+            p.feed_version::varchar as feed_version,
+            p.route_id::varchar as route_id,
+            p.direction_id::integer as direction_id,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.trip_source::varchar as trip_source,
+            p.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('2026-11-25', 'T_OFF250', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_OFF250', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_ZERO', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_ZERO', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_NOPROJ', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_NOPROJ', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_NOSHAPE', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_NOSHAPE', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'TP_NOREP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P3', 'pattern_match', 'CP1'),
+            ('2026-11-25', 'TP_NOREP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P3', 'pattern_match', 'CP3'),
+            ('2026-11-25', 'T_LOOP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_LOOP', 3, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_TIME0', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_TIME0', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_FAST', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_FAST', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_UNC', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_UNC', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3'),
+            ('2026-11-25', 'T_CLAMP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP1'),
+            ('2026-11-25', 'T_CLAMP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 'CP3')
+          ) as p(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, checkpoint_id)
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.feed_version::varchar as feed_version,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T_OFF250', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_OFF250', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_ZERO', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_ZERO', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_NOPROJ', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_NOPROJ', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_NOSHAPE', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_NOSHAPE', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'TP_NOREP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P3', 'pattern_match', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'TP_NOREP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P3', 'pattern_match', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_LOOP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_LOOP', 3, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_TIME0', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_TIME0', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_FAST', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_FAST', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 30.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_UNC', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 30, false),
+            ('2026-11-25', 'T_UNC', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 91, false),
+            ('2026-11-25', 'T_CLAMP', 1, 'S1', 'S1', 'V1', 'R1', 0, 'P1', 'scheduled', 0.0, 'stopped', 10, true),
+            ('2026-11-25', 'T_CLAMP', 3, 'S3', 'S3', 'V1', 'R1', 0, 'P1', 'scheduled', 100.0, 'stopped', 91, false)
+          ) as c(service_date, trip_id, stop_sequence, stop_id, station_id, feed_version, route_id, direction_id, route_pattern_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.trip_id::varchar as trip_id,
+            t.shape_id::varchar as shape_id
+          from (values
+            ('V1', 'T_OFF250', 'SH3'), ('V1', 'T_ZERO', 'SH4'),
+            ('V1', 'T_NOPROJ', 'SH5'), ('V1', 'T_NOSHAPE', null),
+            ('V1', 'T_LOOP', 'SH1'), ('V1', 'T_TIME0', 'SH1'),
+            ('V1', 'T_FAST', 'SH1'), ('V1', 'T_UNC', 'SH3'),
+            ('V1', 'T_CLAMP', 'SH3')
+          ) as t(feed_version, trip_id, shape_id)
+      - input: ref('stg_static__route_patterns')
+        format: sql
+        rows: |
+          select
+            p.feed_version::varchar as feed_version,
+            p.route_pattern_id::varchar as route_pattern_id,
+            p.representative_trip_id::varchar as representative_trip_id
+          from (values
+            ('V1', 'P1', 'T1'),
+            ('V1', 'P3', 'T_MISSING')
+          ) as p(feed_version, route_pattern_id, representative_trip_id)
+      - input: ref('int_shape_stop_distances')
+        format: sql
+        rows: |
+          select
+            d.feed_version::varchar as feed_version,
+            d.shape_id::varchar as shape_id,
+            d.stop_id::varchar as stop_id,
+            d.shape_dist_m::double as shape_dist_m,
+            d.offset_m::double as offset_m
+          from (values
+            ('V1', 'SH1', 'S1', 0.0, 5.0),
+            ('V1', 'SH1', 'S3', 1000.0, 5.0),
+            ('V1', 'SH3', 'S1', 0.0, 250.0),
+            ('V1', 'SH3', 'S3', 1000.0, 5.0),
+            ('V1', 'SH4', 'S1', 800.0, 5.0),
+            ('V1', 'SH4', 'S3', 800.0, 5.0),
+            ('V1', 'SH5', 'S1', 0.0, 5.0)
+          ) as d(feed_version, shape_id, stop_id, shape_dist_m, offset_m)
+    expect:
+      rows:
+        - {trip_id: 'T_OFF250', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: 'SH3', segment_status: 'no_distance'}
+        - {trip_id: 'T_ZERO', travel_time_s: 100.0, distance_m: 0.0, speed_kmh: null, shape_id: 'SH4', segment_status: 'no_distance'}
+        - {trip_id: 'T_NOPROJ', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: 'SH5', segment_status: 'no_distance'}
+        - {trip_id: 'T_NOSHAPE', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: null, segment_status: 'no_distance'}
+        - {trip_id: 'TP_NOREP', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: null, segment_status: 'no_distance'}
+        - {trip_id: 'T_LOOP', travel_time_s: 100.0, distance_m: 0.0, speed_kmh: null, shape_id: 'SH1', segment_status: 'no_distance'}
+        - {trip_id: 'T_TIME0', travel_time_s: 0.0, distance_m: 1000.0, speed_kmh: null, shape_id: 'SH1', segment_status: 'non_positive_time'}
+        - {trip_id: 'T_FAST', travel_time_s: 30.0, distance_m: 1000.0, speed_kmh: 120.0, shape_id: 'SH1', segment_status: 'implausible_speed'}
+        - {trip_id: 'T_UNC', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: 'SH3', segment_status: 'high_uncertainty'}
+        - {trip_id: 'T_CLAMP', travel_time_s: 100.0, distance_m: null, speed_kmh: null, shape_id: 'SH3', segment_status: 'clamped_report'}

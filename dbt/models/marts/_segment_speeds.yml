@@ -1,0 +1,95 @@
+version: 2
+
+models:
+  - name: fct_segment_speeds
+    description: >
+      One trip traversing one consecutive timepoint-to-timepoint segment.
+      Segment status precedence is clamped_report, high_uncertainty,
+      no_distance, non_positive_time, implausible_speed, then valid.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, from_stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: trip_id
+        data_tests: [not_null]
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_routes')
+                field: route_id
+      - name: direction_id
+        data_tests: [not_null]
+      - name: route_pattern_id
+        data_tests: [not_null]
+      - name: trip_source
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: shape_id
+        description: Scheduled trip shape or representative-trip shape for pattern matches.
+      - name: from_stop_sequence
+        data_tests: [not_null]
+      - name: to_stop_sequence
+        data_tests: [not_null]
+      - name: from_stop_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: to_stop_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: from_station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: to_station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: from_crossing_ts
+        data_tests: [not_null]
+      - name: to_crossing_ts
+        data_tests: [not_null]
+      - name: from_crossing_local
+        data_tests: [not_null]
+      - name: hour_start_ts
+        data_tests: [not_null]
+      - name: travel_time_s
+        data_tests: [not_null]
+      - name: distance_m
+      - name: speed_kmh
+      - name: from_crossing_method
+        data_tests: [not_null]
+      - name: to_crossing_method
+        data_tests: [not_null]
+      - name: from_crossing_uncertainty_s
+      - name: to_crossing_uncertainty_s
+      - name: segment_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [valid, clamped_report, high_uncertainty, no_distance, non_positive_time, implausible_speed]
