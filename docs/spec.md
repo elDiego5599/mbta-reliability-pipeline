@@ -344,9 +344,10 @@ Amended 2026-11-26 for the marts (design `docs/superpowers/specs/2026-11-26-dbt-
   shape of the pattern's representative trip). A segment is `no_distance`
   when a stop has no projection, a projection is more than 200 m from the
   stop (`max_stop_shape_offset_m`, about 3 times the timepoint p99 of
-  68 m and above the maximum of 117 m), or the distance is not positive; `non_positive_time` when the second
-  crossing is not later than the first; and `implausible_speed` above
-  100 km/h (`max_segment_speed_kmh`; no in-scope mode runs faster).
+  68 m and above the maximum of 117 m), or the distance is not positive;
+  `non_positive_time` when the second crossing is not later than the first;
+  and `implausible_speed` above 100 km/h (`max_segment_speed_kmh`; no
+  in-scope mode runs faster).
 
 ## 8. Orchestration (phase 3)
 
