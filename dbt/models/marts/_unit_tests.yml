@@ -1,0 +1,123 @@
+version: 2
+
+unit_tests:
+  - name: ut_dim_routes
+    description: Keep the newest route attributes and derive mode and scope.
+    model: dim_routes
+    given:
+      - input: ref('stg_static__versions')
+        format: sql
+        rows: |
+          select
+            v.feed_version::varchar as feed_version,
+            v.first_seen_at::timestamptz as first_seen_at
+          from (values
+            ('V1', '2026-11-20 08:00+00'),
+            ('V2', '2026-11-25 08:00+00'),
+            ('V3', '2026-11-25 08:00+00')
+          ) as v(feed_version, first_seen_at)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_short_name::varchar as route_short_name,
+            r.route_long_name::varchar as route_long_name,
+            r.route_desc::varchar as route_desc,
+            r.route_type::integer as route_type,
+            r.route_color::varchar as route_color,
+            r.route_text_color::varchar as route_text_color,
+            r.route_sort_order::integer as route_sort_order,
+            r.line_id::varchar as line_id
+          from (values
+            ('V1', 'R1', '1', 'Old', null, 1, null, null, null, null),
+            ('V2', 'R1', '1', 'New', null, 1, null, null, null, null),
+            ('V1', 'R2', '2', null, null, 3, null, null, null, null),
+            ('V1', 'R0', '0', null, null, 0, null, null, null, null),
+            ('V1', 'R4', '4', null, null, 4, null, null, null, null),
+            ('V1', 'R7', '7', null, null, 7, null, null, null, null),
+            ('V1', 'RR', 'RR', null, 'Rail Replacement Bus', 3, null, null, null, null),
+            ('V1', 'R2C', '2C', null, null, 2, null, null, null, null),
+            ('V2', 'R9', '9', null, null, 3, null, null, null, null),
+            ('V3', 'R9', '9', null, null, 3, null, null, null, null)
+          ) as r(feed_version, route_id, route_short_name, route_long_name, route_desc, route_type, route_color, route_text_color, route_sort_order, line_id)
+    expect:
+      format: sql
+      rows: |
+        select
+          e.route_id::varchar as route_id,
+          e.feed_version::varchar as feed_version,
+          e.route_short_name::varchar as route_short_name,
+          e.route_long_name::varchar as route_long_name,
+          e.route_desc::varchar as route_desc,
+          e.route_type::integer as route_type,
+          e.mode::varchar as mode,
+          e.route_color::varchar as route_color,
+          e.route_text_color::varchar as route_text_color,
+          e.route_sort_order::integer as route_sort_order,
+          e.line_id::varchar as line_id,
+          e.is_in_scope::boolean as is_in_scope
+        from (values
+          ('R1', 'V2', '1', 'New', null, 1, 'subway', null, null, null, null, true),
+          ('R2', 'V1', '2', null, null, 3, 'bus', null, null, null, null, true),
+          ('R0', 'V1', '0', null, null, 0, 'light_rail', null, null, null, null, true),
+          ('R4', 'V1', '4', null, null, 4, 'ferry', null, null, null, null, false),
+          ('R7', 'V1', '7', null, null, 7, 'other', null, null, null, null, false),
+          ('RR', 'V1', 'RR', null, 'Rail Replacement Bus', 3, 'bus', null, null, null, null, false),
+          ('R2C', 'V1', '2C', null, null, 2, 'commuter_rail', null, null, null, null, false),
+          ('R9', 'V3', '9', null, null, 3, 'bus', null, null, null, null, true)
+        ) as e(route_id, feed_version, route_short_name, route_long_name, route_desc, route_type, mode, route_color, route_text_color, route_sort_order, line_id, is_in_scope)
+
+  - name: ut_dim_stops
+    description: Keep the newest stop attributes and derive station_id.
+    model: dim_stops
+    given:
+      - input: ref('stg_static__versions')
+        format: sql
+        rows: |
+          select
+            v.feed_version::varchar as feed_version,
+            v.first_seen_at::timestamptz as first_seen_at
+          from (values
+            ('V1', '2026-11-20 08:00+00'),
+            ('V2', '2026-11-25 08:00+00')
+          ) as v(feed_version, first_seen_at)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.stop_name::varchar as stop_name,
+            s.parent_station::varchar as parent_station,
+            s.location_type::integer as location_type,
+            s.platform_name::varchar as platform_name,
+            s.stop_lat::double as stop_lat,
+            s.stop_lon::double as stop_lon,
+            s.municipality::varchar as municipality
+          from (values
+            ('V1', 'S1', 'Old', null, 0, null, null, null, null),
+            ('V2', 'S1', 'New', null, 0, null, null, null, null),
+            ('V1', 'P1', null, 'PL1', 0, null, null, null, null),
+            ('V1', 'PL1', null, null, 1, null, null, null, null)
+          ) as s(feed_version, stop_id, stop_name, parent_station, location_type, platform_name, stop_lat, stop_lon, municipality)
+    expect:
+      format: sql
+      rows: |
+        select
+          e.stop_id::varchar as stop_id,
+          e.feed_version::varchar as feed_version,
+          e.stop_name::varchar as stop_name,
+          e.station_id::varchar as station_id,
+          e.parent_station::varchar as parent_station,
+          e.location_type::integer as location_type,
+          e.platform_name::varchar as platform_name,
+          e.stop_lat::double as stop_lat,
+          e.stop_lon::double as stop_lon,
+          e.municipality::varchar as municipality
+        from (values
+          ('S1', 'V2', 'New', 'S1', null, 0, null, null, null, null),
+          ('P1', 'V1', null, 'PL1', 'PL1', 0, null, null, null, null),
+          ('PL1', 'V1', null, 'PL1', null, 1, null, null, null, null)
+        ) as e(stop_id, feed_version, stop_name, station_id, parent_station, location_type, platform_name, stop_lat, stop_lon, municipality)

@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: dim_routes
+    description: One route per route_id, with attributes from its newest static version.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [route_id]
+    columns:
+      - name: route_id
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: mode
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [light_rail, subway, commuter_rail, bus, ferry, other]
+      - name: is_in_scope
+        data_tests: [not_null]
+
+  - name: dim_stops
+    description: One stop per stop_id, with attributes from its newest static version.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [stop_id]
+    columns:
+      - name: stop_id
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: station_id
+        data_tests: [not_null]
