@@ -17,8 +17,19 @@ models:
     intermediate:
       +schema: intermediate
       +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
 
 vars:
+  max_crossing_uncertainty_s: 90
+  max_frequent_headway_s: 900
+  min_hour_coverage: 0.9
+  min_headways_per_hour: 4
+  bunching_ratio: 0.25
+  gapping_ratio: 1.5
+  on_time_early_s: -60
+  on_time_late_s: 300
   poll_interval_s:
     VehiclePositions: 30
     TripUpdates: 300
