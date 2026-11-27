@@ -348,3 +348,262 @@ unit_tests:
           as m(feed_version, route_id, direction_id, station_id, stop_id, stop_sequence)
     expect:
       rows: []
+
+  - name: ut_adherence
+    description: Departure adherence, inclusive on-time boundaries, and early and late cases.
+    model: fct_schedule_adherence
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.feed_version::varchar as feed_version,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.checkpoint_id::varchar as checkpoint_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T1', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 940.0, 'stopped', 30, false),
+            ('2026-11-25', 'T1', 2, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 2300.0, 'stopped', 30, false),
+            ('2026-11-25', 'T1', 3, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 2939.0, 'stopped', 30, false),
+            ('2026-11-25', 'T1', 4, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 4301.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_scheduled_stop_times')
+        format: sql
+        rows: |
+          select
+            s.service_date::date as service_date,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.route_id::varchar as route_id,
+            s.direction_id::integer as direction_id,
+            s.route_pattern_id::varchar as route_pattern_id,
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.station_id::varchar as station_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.scheduled_arrival_ts::double as scheduled_arrival_ts,
+            s.scheduled_departure_ts::double as scheduled_departure_ts
+          from (values
+            ('2026-11-25', 'T1', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 950.0, 1000.0),
+            ('2026-11-25', 'T1', 2, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 1950.0, 2000.0),
+            ('2026-11-25', 'T1', 3, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 2950.0, 3000.0),
+            ('2026-11-25', 'T1', 4, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 3950.0, 4000.0)
+          ) as s(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, scheduled_arrival_ts, scheduled_departure_ts)
+    expect:
+      rows:
+        - {service_date: '2026-11-25', trip_id: 'T1', stop_sequence: 1, adherence_s: -60.0, is_on_time: true}
+        - {service_date: '2026-11-25', trip_id: 'T1', stop_sequence: 2, adherence_s: 300.0, is_on_time: true}
+        - {service_date: '2026-11-25', trip_id: 'T1', stop_sequence: 3, adherence_s: -61.0, is_on_time: false}
+        - {service_date: '2026-11-25', trip_id: 'T1', stop_sequence: 4, adherence_s: 301.0, is_on_time: false}
+
+  - name: ut_adherence_terminal
+    description: Terminal arrival crossings use scheduled arrival.
+    model: fct_schedule_adherence
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.feed_version::varchar as feed_version,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.checkpoint_id::varchar as checkpoint_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'T1', 5, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 5050.0, 'terminal_arrival', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_scheduled_stop_times')
+        format: sql
+        rows: |
+          select
+            s.service_date::date as service_date,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.route_id::varchar as route_id,
+            s.direction_id::integer as direction_id,
+            s.route_pattern_id::varchar as route_pattern_id,
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.station_id::varchar as station_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.scheduled_arrival_ts::double as scheduled_arrival_ts,
+            s.scheduled_departure_ts::double as scheduled_departure_ts
+          from (values
+            ('2026-11-25', 'T1', 5, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 5000.0, 5100.0)
+          ) as s(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, scheduled_arrival_ts, scheduled_departure_ts)
+    expect:
+      rows:
+        - {trip_id: 'T1', stop_sequence: 5, scheduled_ts: 5000.0, scheduled_reference: 'arrival', adherence_s: 50.0}
+
+  - name: ut_adherence_pattern_match
+    description: Pattern-matched crossings do not join to scheduled stop times.
+    model: fct_schedule_adherence
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.feed_version::varchar as feed_version,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.checkpoint_id::varchar as checkpoint_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'TP', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'pattern_match', 1000.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_scheduled_stop_times')
+        format: sql
+        rows: |
+          select
+            s.service_date::date as service_date,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.route_id::varchar as route_id,
+            s.direction_id::integer as direction_id,
+            s.route_pattern_id::varchar as route_pattern_id,
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.station_id::varchar as station_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.scheduled_arrival_ts::double as scheduled_arrival_ts,
+            s.scheduled_departure_ts::double as scheduled_departure_ts
+          from (values
+            ('2026-11-25', 'TP', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 950.0, 1000.0)
+          ) as s(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, scheduled_arrival_ts, scheduled_departure_ts)
+    expect:
+      rows: []
+
+  - name: ut_adherence_hour
+    description: The hour key comes from scheduled time rather than crossing time.
+    model: fct_schedule_adherence
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.feed_version::varchar as feed_version,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.checkpoint_id::varchar as checkpoint_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'TH', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 7300.0, 'stopped', 30, false)
+          ) as c(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_scheduled_stop_times')
+        format: sql
+        rows: |
+          select
+            s.service_date::date as service_date,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.route_id::varchar as route_id,
+            s.direction_id::integer as direction_id,
+            s.route_pattern_id::varchar as route_pattern_id,
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.station_id::varchar as station_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.scheduled_arrival_ts::double as scheduled_arrival_ts,
+            s.scheduled_departure_ts::double as scheduled_departure_ts
+          from (values
+            ('2026-11-25', 'TH', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 7190.0, 7199.0)
+          ) as s(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, scheduled_arrival_ts, scheduled_departure_ts)
+    expect:
+      rows:
+        - {trip_id: 'TH', stop_sequence: 1, hour_start_ts: 3600}
+
+  - name: ut_adherence_status
+    description: Crossing status precedence for adherence rows.
+    model: fct_schedule_adherence
+    given:
+      - input: ref('int_stop_crossings')
+        format: sql
+        rows: |
+          select
+            c.service_date::date as service_date,
+            c.trip_id::varchar as trip_id,
+            c.stop_sequence::integer as stop_sequence,
+            c.route_id::varchar as route_id,
+            c.direction_id::integer as direction_id,
+            c.route_pattern_id::varchar as route_pattern_id,
+            c.feed_version::varchar as feed_version,
+            c.stop_id::varchar as stop_id,
+            c.station_id::varchar as station_id,
+            c.checkpoint_id::varchar as checkpoint_id,
+            c.trip_source::varchar as trip_source,
+            c.crossing_ts::double as crossing_ts,
+            c.crossing_method::varchar as crossing_method,
+            c.crossing_uncertainty_s::bigint as crossing_uncertainty_s,
+            c.uses_clamped_report::boolean as uses_clamped_report
+          from (values
+            ('2026-11-25', 'THIGH', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 1001.0, 'stopped', 91, false),
+            ('2026-11-25', 'TVALID', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 1001.0, 'stopped', 90, false),
+            ('2026-11-25', 'TCLAMP', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 'scheduled', 1001.0, 'stopped', 10, true)
+          ) as c(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, trip_source, crossing_ts, crossing_method, crossing_uncertainty_s, uses_clamped_report)
+      - input: ref('int_scheduled_stop_times')
+        format: sql
+        rows: |
+          select
+            s.service_date::date as service_date,
+            s.trip_id::varchar as trip_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.route_id::varchar as route_id,
+            s.direction_id::integer as direction_id,
+            s.route_pattern_id::varchar as route_pattern_id,
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.station_id::varchar as station_id,
+            s.checkpoint_id::varchar as checkpoint_id,
+            s.scheduled_arrival_ts::double as scheduled_arrival_ts,
+            s.scheduled_departure_ts::double as scheduled_departure_ts
+          from (values
+            ('2026-11-25', 'THIGH', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 950.0, 1000.0),
+            ('2026-11-25', 'TVALID', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 950.0, 1000.0),
+            ('2026-11-25', 'TCLAMP', 1, 'R1', 0, 'P1', 'V1', 'S1', 'ST1', 'C1', 950.0, 1000.0)
+          ) as s(service_date, trip_id, stop_sequence, route_id, direction_id, route_pattern_id, feed_version, stop_id, station_id, checkpoint_id, scheduled_arrival_ts, scheduled_departure_ts)
+    expect:
+      rows:
+        - {trip_id: 'THIGH', stop_sequence: 1, adherence_status: 'high_uncertainty'}
+        - {trip_id: 'TVALID', stop_sequence: 1, adherence_status: 'valid'}
+        - {trip_id: 'TCLAMP', stop_sequence: 1, adherence_status: 'clamped_report'}

@@ -98,3 +98,85 @@ models:
           - accepted_values:
               arguments:
                 values: [valid, clamped_report, high_uncertainty]
+
+  - name: fct_schedule_adherence
+    description: One observed crossing joined to its scheduled timepoint.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: service_date
+        data_tests: [not_null]
+      - name: trip_id
+        data_tests: [not_null]
+      - name: stop_sequence
+        data_tests: [not_null]
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_routes')
+                field: route_id
+      - name: direction_id
+        data_tests: [not_null]
+      - name: route_pattern_id
+        data_tests: [not_null]
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: stop_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stops')
+                field: stop_id
+      - name: checkpoint_id
+        data_tests: [not_null]
+      - name: crossing_ts
+        data_tests: [not_null]
+      - name: crossing_local
+        data_tests: [not_null]
+      - name: scheduled_ts
+        data_tests: [not_null]
+      - name: scheduled_local
+        data_tests: [not_null]
+      - name: scheduled_reference
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [departure, arrival]
+      - name: hour_start_ts
+        data_tests: [not_null]
+      - name: adherence_s
+        data_tests: [not_null]
+      - name: is_on_time
+        data_tests: [not_null]
+      - name: crossing_method
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [stopped, interpolated, terminal_arrival]
+      - name: crossing_uncertainty_s
+        data_tests: [not_null]
+      - name: adherence_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [valid, clamped_report, high_uncertainty]
