@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: int_shape_stop_distances
+    description: One projected timepoint stop per static shape and stop; the projection is the nearest shape point, limited to one row for loop shapes.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_version, shape_id, stop_id]
+    columns:
+      - name: feed_version
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_static__versions')
+                field: feed_version
+      - name: shape_id
+        data_tests: [not_null]
+      - name: stop_id
+        data_tests: [not_null]
+      - name: shape_pt_sequence
+        data_tests: [not_null]
+      - name: shape_dist_m
+        data_tests: [not_null]
+      - name: offset_m
+        data_tests: [not_null]

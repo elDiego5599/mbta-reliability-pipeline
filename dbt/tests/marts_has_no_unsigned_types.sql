@@ -5,6 +5,7 @@
 -- depends_on: {{ ref('dim_stops') }}
 -- depends_on: {{ ref('fct_headways') }}
 -- depends_on: {{ ref('fct_schedule_adherence') }}
+-- depends_on: {{ ref('fct_segment_speeds') }}
 -- depends_on: {{ ref('agg_route_hour_reliability') }}
 select
     table_schema,

@@ -6,6 +6,9 @@ with mart_dates as (
     from {{ ref('fct_schedule_adherence') }}
     union
     select distinct service_date
+    from {{ ref('fct_segment_speeds') }}
+    union
+    select distinct service_date
     from {{ ref('agg_route_hour_reliability') }}
 )
 

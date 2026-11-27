@@ -1,0 +1,109 @@
+version: 2
+
+unit_tests:
+  - name: ut_shape_stop_distances
+    description: Project each timepoint stop onto the nearest point of an in-scope route shape, with duplicate-point tie-breaking and distinct shape-stop pairs.
+    model: int_shape_stop_distances
+    given:
+      - input: ref('stg_static__stop_times')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.trip_id::varchar as trip_id,
+            s.stop_id::varchar as stop_id,
+            s.stop_sequence::integer as stop_sequence,
+            s.checkpoint_id::varchar as checkpoint_id
+          from (values
+            ('V1', 'T1', 'S_A', 1, 'CP_A'),
+            ('V1', 'T1', 'S_TIE', 2, 'CP_TIE'),
+            ('V1', 'T1', 'S_FIRST', 3, 'CP_FIRST'),
+            ('V1', 'T1', 'S_FAR', 4, 'CP_FAR'),
+            ('V1', 'T1', 'S_NULL', 5, 'CP_NULL'),
+            ('V1', 'T1', 'S_NOCP', 6, null),
+            ('V1', 'T2', 'S_A', 1, 'CP_A'),
+            ('V1', 'T_CR', 'S_A', 1, 'CP_A'),
+            ('V1', 'T_NS', 'S_A', 1, 'CP_A'),
+            ('V2', 'T1', 'S_A', 1, 'CP_A')
+          ) as s(feed_version, trip_id, stop_id, stop_sequence, checkpoint_id)
+      - input: ref('stg_static__trips')
+        format: sql
+        rows: |
+          select
+            t.feed_version::varchar as feed_version,
+            t.route_id::varchar as route_id,
+            t.trip_id::varchar as trip_id,
+            t.shape_id::varchar as shape_id
+          from (values
+            ('V1', 'R1', 'T1', 'SH1'),
+            ('V1', 'R1', 'T2', 'SH1'),
+            ('V1', 'R_CR', 'T_CR', 'SH2'),
+            ('V1', 'R1', 'T_NS', null),
+            ('V2', 'R1', 'T1', 'SH1')
+          ) as t(feed_version, route_id, trip_id, shape_id)
+      - input: ref('stg_static__routes')
+        format: sql
+        rows: |
+          select
+            r.feed_version::varchar as feed_version,
+            r.route_id::varchar as route_id,
+            r.route_type::integer as route_type,
+            r.route_desc::varchar as route_desc
+          from (values
+            ('V1', 'R1', 3, 'Local bus'),
+            ('V1', 'R_CR', 2, 'Commuter rail'),
+            ('V2', 'R1', 3, 'Local bus')
+          ) as r(feed_version, route_id, route_type, route_desc)
+      - input: ref('stg_static__stops')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.stop_id::varchar as stop_id,
+            s.stop_lat::double as stop_lat,
+            s.stop_lon::double as stop_lon
+          from (values
+            ('V1', 'S_A', 42.0011, -71.0),
+            ('V1', 'S_TIE', 42.002, -70.999),
+            ('V1', 'S_FIRST', 42.0, -71.0),
+            ('V1', 'S_FAR', 42.003, -70.997),
+            ('V1', 'S_NOCP', 42.0015, -71.0),
+            ('V1', 'S_NULL', null, null),
+            ('V2', 'S_A', 42.0011, -71.0)
+          ) as s(feed_version, stop_id, stop_lat, stop_lon)
+      - input: ref('stg_static__shapes')
+        format: sql
+        rows: |
+          select
+            s.feed_version::varchar as feed_version,
+            s.shape_id::varchar as shape_id,
+            s.shape_pt_sequence::integer as shape_pt_sequence,
+            s.shape_pt_lat::double as shape_pt_lat,
+            s.shape_pt_lon::double as shape_pt_lon
+          from (values
+            ('V1', 'SH1', 10, 42.000, -71.0),
+            ('V1', 'SH1', 20, 42.001, -71.0),
+            ('V1', 'SH1', 30, 42.002, -71.0),
+            ('V1', 'SH1', 31, 42.002, -71.0),
+            ('V1', 'SH1', 40, 42.003, -71.0),
+            ('V1', 'SH2', 1, 42.0011, -71.0),
+            ('V2', 'SH1', 1, 42.000, -71.0),
+            ('V2', 'SH1', 2, 42.002, -71.0)
+          ) as s(feed_version, shape_id, shape_pt_sequence, shape_pt_lat, shape_pt_lon)
+    expect:
+      format: sql
+      rows: |
+        select
+          e.feed_version::varchar as feed_version,
+          e.shape_id::varchar as shape_id,
+          e.stop_id::varchar as stop_id,
+          e.shape_pt_sequence::integer as shape_pt_sequence,
+          e.shape_dist_m::double as shape_dist_m,
+          e.offset_m::double as offset_m
+        from (values
+          ('V1', 'SH1', 'S_A', 20, 111.195, 11.12),
+          ('V1', 'SH1', 'S_TIE', 30, 222.39, 82.631),
+          ('V1', 'SH1', 'S_FIRST', 10, 0.0, 0.0),
+          ('V1', 'SH1', 'S_FAR', 40, 333.585, 247.89),
+          ('V2', 'SH1', 'S_A', 2, 222.39, 100.076)
+        ) as e(feed_version, shape_id, stop_id, shape_pt_sequence, shape_dist_m, offset_m)
